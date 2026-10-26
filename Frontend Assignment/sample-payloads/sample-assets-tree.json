@@ -1,0 +1,43 @@
+{
+  "trace_id": "7f2b91c4d8e34a5f9b1c6d2e8a4f7b3c",
+  "status_code": 200,
+  "message": "OK",
+  "note_for_candidate": "GET /core/assets/tree — a nested asset hierarchy. Use the selected node's 'id' + 'assetlevel_id' as entity_scope.asset { asset_id, asset_level_id } in the analytics calls.",
+  "data": [
+    {
+      "id": "83d34607-5e52-4b6b-86c2-a5f8d8fdf5cb",
+      "name": "Noviga",
+      "codename": null,
+      "assetlevel_id": 50,
+      "hierarchy": null,
+      "children": [
+        {
+          "id": "b95f2c1a-4e6d-4a8b-9c3f-7d1e5a2b8c4f",
+          "name": "Noida",
+          "codename": null,
+          "assetlevel_id": 40,
+          "hierarchy": null,
+          "children": [
+            {
+              "id": "283f3d3d-f1bb-410d-b299-84927ec8176e",
+              "name": "SMT Line 1",
+              "codename": "LINE-01",
+              "assetlevel_id": 20,
+              "hierarchy": null,
+              "children": [
+                {
+                  "id": "04f3a8b2-6c1d-4e9f-8a5b-2d7c9e1f4a6b",
+                  "name": "AOI",
+                  "codename": "AOI - 01",
+                  "assetlevel_id": 10,
+                  "hierarchy": null,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

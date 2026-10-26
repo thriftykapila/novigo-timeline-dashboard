@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+.vercel/
+.DS_Store
+output/
+.playwright-cli/
+Frontend Assignment Updated.zip
+*.tsbuildinfo

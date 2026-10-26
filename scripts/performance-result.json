@@ -1,0 +1,371 @@
+{
+  "measuredAt": "2026-10-26T08:48:47.441Z",
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+    "hardwareConcurrency": 8,
+    "devicePixelRatio": 1,
+    "viewport": {
+      "width": 1440,
+      "height": 1100
+    },
+    "longTasksSupported": true,
+    "longTasks": []
+  },
+  "fixture": {
+    "markers": 20000,
+    "failures": 800,
+    "partModels": 3,
+    "durationHours": 12,
+    "unsortedInput": true,
+    "isolation": "Playwright novigo-perf browser-session request interception only; no production code or backend modifications"
+  },
+  "initial": {
+    "drawMs": 7.1,
+    "visibleMarkers": 20000,
+    "renderedMarkers": 4840,
+    "failMarkers": 800,
+    "cssWidth": 1248,
+    "cssHeight": 318,
+    "backingWidth": 1248,
+    "backingHeight": 318,
+    "viewFrom": 1788202800000,
+    "viewTo": 1788246000000,
+    "drawRevision": 1
+  },
+  "zoomSamples": [
+    {
+      "iteration": 0,
+      "action": "Zoom in",
+      "playwrightActionMs": 43,
+      "drawMs": 4.1,
+      "visibleMarkers": 10000,
+      "renderedMarkers": 4115,
+      "failMarkers": 400,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788213600000,
+      "viewTo": 1788235200000,
+      "drawRevision": 2,
+      "expectedFailMarkers": 400,
+      "accessibleSummary": "Production chart from 01 Sept, 03:30:00 to 01 Sept, 09:30:00 IST. 20,000 individual produce markers, including 800 failure markers. Circles indicate PASS and red crosses indicate FAIL. Colored bands show machine state. All failure markers are retained at every zoom level."
+    },
+    {
+      "iteration": 0,
+      "action": "Zoom in",
+      "playwrightActionMs": 32,
+      "drawMs": 2.5,
+      "visibleMarkers": 5000,
+      "renderedMarkers": 3682,
+      "failMarkers": 200,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788219000000,
+      "viewTo": 1788229800000,
+      "drawRevision": 3,
+      "expectedFailMarkers": 200,
+      "accessibleSummary": "Production chart from 01 Sept, 05:00:00 to 01 Sept, 08:00:00 IST. 20,000 individual produce markers, including 800 failure markers. Circles indicate PASS and red crosses indicate FAIL. Colored bands show machine state. All failure markers are retained at every zoom level."
+    },
+    {
+      "iteration": 0,
+      "action": "Zoom out",
+      "playwrightActionMs": 35,
+      "drawMs": 3.9,
+      "visibleMarkers": 10000,
+      "renderedMarkers": 4115,
+      "failMarkers": 400,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788213600000,
+      "viewTo": 1788235200000,
+      "drawRevision": 4,
+      "expectedFailMarkers": 400,
+      "accessibleSummary": "Production chart from 01 Sept, 03:30:00 to 01 Sept, 09:30:00 IST. 20,000 individual produce markers, including 800 failure markers. Circles indicate PASS and red crosses indicate FAIL. Colored bands show machine state. All failure markers are retained at every zoom level."
+    },
+    {
+      "iteration": 0,
+      "action": "Zoom out",
+      "playwrightActionMs": 35,
+      "drawMs": 6.3,
+      "visibleMarkers": 20000,
+      "renderedMarkers": 4840,
+      "failMarkers": 800,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788202800000,
+      "viewTo": 1788246000000,
+      "drawRevision": 5,
+      "expectedFailMarkers": 800,
+      "accessibleSummary": "Production chart from 01 Sept, 00:30:00 to 01 Sept, 12:30:00 IST. 20,000 individual produce markers, including 800 failure markers. Circles indicate PASS and red crosses indicate FAIL. Colored bands show machine state. All failure markers are retained at every zoom level."
+    },
+    {
+      "iteration": 1,
+      "action": "Zoom in",
+      "playwrightActionMs": 32,
+      "drawMs": 1.6,
+      "visibleMarkers": 10000,
+      "renderedMarkers": 4115,
+      "failMarkers": 400,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788213600000,
+      "viewTo": 1788235200000,
+      "drawRevision": 6,
+      "expectedFailMarkers": 400,
+      "accessibleSummary": "Production chart from 01 Sept, 03:30:00 to 01 Sept, 09:30:00 IST. 20,000 individual produce markers, including 800 failure markers. Circles indicate PASS and red crosses indicate FAIL. Colored bands show machine state. All failure markers are retained at every zoom level."
+    },
+    {
+      "iteration": 1,
+      "action": "Zoom in",
+      "playwrightActionMs": 25,
+      "drawMs": 1.3,
+      "visibleMarkers": 5000,
+      "renderedMarkers": 3682,
+      "failMarkers": 200,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788219000000,
+      "viewTo": 1788229800000,
+      "drawRevision": 7,
+      "expectedFailMarkers": 200,
+      "accessibleSummary": "Production chart from 01 Sept, 05:00:00 to 01 Sept, 08:00:00 IST. 20,000 individual produce markers, including 800 failure markers. Circles indicate PASS and red crosses indicate FAIL. Colored bands show machine state. All failure markers are retained at every zoom level."
+    },
+    {
+      "iteration": 1,
+      "action": "Zoom out",
+      "playwrightActionMs": 32,
+      "drawMs": 1.5,
+      "visibleMarkers": 10000,
+      "renderedMarkers": 4115,
+      "failMarkers": 400,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788213600000,
+      "viewTo": 1788235200000,
+      "drawRevision": 8,
+      "expectedFailMarkers": 400,
+      "accessibleSummary": "Production chart from 01 Sept, 03:30:00 to 01 Sept, 09:30:00 IST. 20,000 individual produce markers, including 800 failure markers. Circles indicate PASS and red crosses indicate FAIL. Colored bands show machine state. All failure markers are retained at every zoom level."
+    },
+    {
+      "iteration": 1,
+      "action": "Zoom out",
+      "playwrightActionMs": 29,
+      "drawMs": 2.7,
+      "visibleMarkers": 20000,
+      "renderedMarkers": 4840,
+      "failMarkers": 800,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788202800000,
+      "viewTo": 1788246000000,
+      "drawRevision": 9,
+      "expectedFailMarkers": 800,
+      "accessibleSummary": "Production chart from 01 Sept, 00:30:00 to 01 Sept, 12:30:00 IST. 20,000 individual produce markers, including 800 failure markers. Circles indicate PASS and red crosses indicate FAIL. Colored bands show machine state. All failure markers are retained at every zoom level."
+    },
+    {
+      "iteration": 2,
+      "action": "Zoom in",
+      "playwrightActionMs": 32,
+      "drawMs": 2,
+      "visibleMarkers": 10000,
+      "renderedMarkers": 4115,
+      "failMarkers": 400,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788213600000,
+      "viewTo": 1788235200000,
+      "drawRevision": 10,
+      "expectedFailMarkers": 400,
+      "accessibleSummary": "Production chart from 01 Sept, 03:30:00 to 01 Sept, 09:30:00 IST. 20,000 individual produce markers, including 800 failure markers. Circles indicate PASS and red crosses indicate FAIL. Colored bands show machine state. All failure markers are retained at every zoom level."
+    },
+    {
+      "iteration": 2,
+      "action": "Zoom in",
+      "playwrightActionMs": 36,
+      "drawMs": 1.2,
+      "visibleMarkers": 5000,
+      "renderedMarkers": 3682,
+      "failMarkers": 200,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788219000000,
+      "viewTo": 1788229800000,
+      "drawRevision": 11,
+      "expectedFailMarkers": 200,
+      "accessibleSummary": "Production chart from 01 Sept, 05:00:00 to 01 Sept, 08:00:00 IST. 20,000 individual produce markers, including 800 failure markers. Circles indicate PASS and red crosses indicate FAIL. Colored bands show machine state. All failure markers are retained at every zoom level."
+    },
+    {
+      "iteration": 2,
+      "action": "Zoom out",
+      "playwrightActionMs": 29,
+      "drawMs": 1.5,
+      "visibleMarkers": 10000,
+      "renderedMarkers": 4115,
+      "failMarkers": 400,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788213600000,
+      "viewTo": 1788235200000,
+      "drawRevision": 12,
+      "expectedFailMarkers": 400,
+      "accessibleSummary": "Production chart from 01 Sept, 03:30:00 to 01 Sept, 09:30:00 IST. 20,000 individual produce markers, including 800 failure markers. Circles indicate PASS and red crosses indicate FAIL. Colored bands show machine state. All failure markers are retained at every zoom level."
+    },
+    {
+      "iteration": 2,
+      "action": "Zoom out",
+      "playwrightActionMs": 33,
+      "drawMs": 2.6,
+      "visibleMarkers": 20000,
+      "renderedMarkers": 4840,
+      "failMarkers": 800,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788202800000,
+      "viewTo": 1788246000000,
+      "drawRevision": 13,
+      "expectedFailMarkers": 800,
+      "accessibleSummary": "Production chart from 01 Sept, 00:30:00 to 01 Sept, 12:30:00 IST. 20,000 individual produce markers, including 800 failure markers. Circles indicate PASS and red crosses indicate FAIL. Colored bands show machine state. All failure markers are retained at every zoom level."
+    }
+  ],
+  "zoomFailureCounts": [
+    {
+      "action": "Zoom in",
+      "failMarkers": 400,
+      "expectedFailMarkers": 400
+    },
+    {
+      "action": "Zoom in",
+      "failMarkers": 200,
+      "expectedFailMarkers": 200
+    },
+    {
+      "action": "Zoom out",
+      "failMarkers": 400,
+      "expectedFailMarkers": 400
+    },
+    {
+      "action": "Zoom out",
+      "failMarkers": 800,
+      "expectedFailMarkers": 800
+    },
+    {
+      "action": "Zoom in",
+      "failMarkers": 400,
+      "expectedFailMarkers": 400
+    },
+    {
+      "action": "Zoom in",
+      "failMarkers": 200,
+      "expectedFailMarkers": 200
+    },
+    {
+      "action": "Zoom out",
+      "failMarkers": 400,
+      "expectedFailMarkers": 400
+    },
+    {
+      "action": "Zoom out",
+      "failMarkers": 800,
+      "expectedFailMarkers": 800
+    },
+    {
+      "action": "Zoom in",
+      "failMarkers": 400,
+      "expectedFailMarkers": 400
+    },
+    {
+      "action": "Zoom in",
+      "failMarkers": 200,
+      "expectedFailMarkers": 200
+    },
+    {
+      "action": "Zoom out",
+      "failMarkers": 400,
+      "expectedFailMarkers": 400
+    },
+    {
+      "action": "Zoom out",
+      "failMarkers": 800,
+      "expectedFailMarkers": 800
+    }
+  ],
+  "hover": {
+    "samples": 90,
+    "minMs": 9.099999999627471,
+    "medianMs": 16.699999999254942,
+    "p95Ms": 17.59999999962747,
+    "maxMs": 17.699999999254942,
+    "handlerMedianMs": 0.1,
+    "handlerP95Ms": 0.2,
+    "handlerMaxMs": 0.3,
+    "visibleTooltips": 90,
+    "baseCanvasUnchanged": true
+  },
+  "keyboardTooltip": "\u00d7 FAIL \u00b7 Individual produce\n01 Sept, 00:30:01 IST\n1 part \u00b7 1 cumulative\nPart model: D22\nID: performance-part-00000",
+  "brush": {
+    "before": {
+      "drawMs": 2.6,
+      "visibleMarkers": 20000,
+      "renderedMarkers": 4840,
+      "failMarkers": 800,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788202800000,
+      "viewTo": 1788246000000,
+      "drawRevision": 13
+    },
+    "after": {
+      "drawMs": 1.9,
+      "visibleMarkers": 8000,
+      "renderedMarkers": 3977,
+      "failMarkers": 320,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788215760000.8992,
+      "viewTo": 1788233039999.1008,
+      "drawRevision": 14
+    },
+    "reset": {
+      "drawMs": 6.9,
+      "visibleMarkers": 20000,
+      "renderedMarkers": 4840,
+      "failMarkers": 800,
+      "cssWidth": 1248,
+      "cssHeight": 318,
+      "backingWidth": 1248,
+      "backingHeight": 318,
+      "viewFrom": 1788202800000,
+      "viewTo": 1788246000000,
+      "drawRevision": 15
+    }
+  },
+  "pageErrors": [],
+  "caveat": "Machine-specific Chromium development-build timings. drawMs measures chart preparation and base-canvas draw commands, not backend/network time or compositor completion. Hover latency waits two animation frames and includes frame scheduling. Long tasks cover the entire page including React startup and fixture parsing."
+}

@@ -1,0 +1,20 @@
+{
+  "trace_id": "6611abcda43bef26f498eaa4be2fc647",
+  "status_code": 200,
+  "message": "OK",
+  "data": {
+    "id": "a7c6c848-1a89-40d0-95c0-c54d34bcd602",
+    "hid": 1,
+    "username": "user",
+    "email": "user@mail.com",
+    "name": "User",
+    "customer_id": "83d34607-5e52-4b6b-86c2-a5f8d8fdf5cb",
+    "customer_name": "Noviga",
+    "designation_id": "571114b9-e421-4c06-b1d0-be5d8fa44b2f",
+    "designation_name": "User",
+    "department_id": "26a37a76-7234-49e0-84f5-3d52f0e2ced2",
+    "department_name": "Administration",
+    "status": "active",
+    "roles": ["SuperAdmin"]
+  }
+}

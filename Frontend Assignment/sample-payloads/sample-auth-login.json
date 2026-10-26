@@ -1,0 +1,9 @@
+{
+  "trace_id": "b7f3c1e2-9a4d-4c8b-9f21-1a2b3c4d5e6f",
+  "status_code": 200,
+  "message": "Login successful",
+  "data": {
+    "access_token": "token",
+    "token_type": "bearer"
+  }
+}

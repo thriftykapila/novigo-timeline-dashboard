@@ -1,0 +1,7 @@
+{
+  "trace_id": "3e8a1c5f7b2d49e6c4a8f1b5d9e3c7a2",
+  "status_code": 200,
+  "message": "Logged out successfully",
+  "note_for_candidate": "POST /auth/logout (authenticated). After this call, clear the stored token client-side and redirect to /login.",
+  "data": null
+}

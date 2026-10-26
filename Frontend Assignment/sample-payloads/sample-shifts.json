@@ -1,0 +1,15 @@
+{
+  "trace_id": "9c4e2a7b1f8d43c6a5b9e3d7f2c8a1b4",
+  "status_code": 200,
+  "message": "OK",
+  "note_for_candidate": "GET /core/shifts — shift_timings is a list of shift START times in 'HH:MM' local IST, not a [start, end] pair. Each entry starts a shift that runs until the next entry; the last entry runs until the first one, crossing midnight. e.g. ['00:30','12:30'] means two shifts: 00:30-12:30 and 12:30-00:30. Do not hard-code shift names.",
+  "data": [
+    {
+      "id": "b4bb7e2d-8f1a-4c6e-9d3b-5a7f2e8c1d4a",
+      "code": "main",
+      "name": "main",
+      "shift_timings": ["00:30", "12:30"],
+      "is_active": true
+    }
+  ]
+}
