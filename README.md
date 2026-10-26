@@ -2,6 +2,8 @@
 
 A React 18 + TypeScript production analytics dashboard, built with Vite and MUI v6 against the assignment's real backend.
 
+[Live dashboard](https://novigo-kappa.vercel.app) · [Demo video](https://novigo-kappa.vercel.app/demo.html) · [Implementation notes](NOTES.md)
+
 ![Production timeline and hourly summary](docs/dashboard.png)
 
 ## Run locally

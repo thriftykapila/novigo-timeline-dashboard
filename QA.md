@@ -16,7 +16,7 @@ Tests include expired sessions, login rejection, bearer wiring, envelope errors,
 
 - Empty-form validation and rejected login display inline messages; successful login displays Analytics User.
 - Default Line1 SPI, 1 September 2026, 06:00–14:30 returns 326 parts (221 PASS, 105 FAIL).
-- Individual mode renders all 326 markers, including all 105 FAILs; hourly mode uses the coarse endpoint payload.
+- Individual mode processes 326 produces and renders all 105 FAILs. Same-pixel PASS coalescing drew 324 markers in the live check; hourly mode uses the coarse endpoint payload.
 - Hover and keyboard marker inspection expose result, produce ID and IST timestamp.
 - Drag zoom, double-click reset, and visible zoom/reset controls work.
 - Machine/date/shift changes refetch correctly. Overnight 23:00–06:00 on 1 September sends `2026-09-01T17:30:00Z` through `2026-09-02T00:30:00Z`.
@@ -60,3 +60,11 @@ The script prints its measurement JSON. It creates an isolated fake session insi
 ## Demo
 
 The checked-in [public/demo.webm](public/demo.webm) records the actual browser app with the supplied backend. The deployed `/demo.html` page provides a video player and download link. Chapter cards explain the workflow; audio is not required to follow it.
+
+## Submission links
+
+- Repository: [thriftykapila/novigo-timeline-dashboard](https://github.com/thriftykapila/novigo-timeline-dashboard)
+- Deployment: [novigo-kappa.vercel.app](https://novigo-kappa.vercel.app)
+- Walkthrough: [demo player](https://novigo-kappa.vercel.app/demo.html)
+
+Vercel reports the deployment ready. Deployment authentication is disabled for this assignment project so reviewers can reach the app login and public video. Local browser and serverless-handler verification is reported above; no extra HTTP smoke request was made against the deployed URL.
