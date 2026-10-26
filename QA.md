@@ -27,7 +27,7 @@ Tests include expired sessions, login rejection, bearer wiring, envelope errors,
 
 ## 20,000-marker performance exercise
 
-The live service returned a smaller dataset, so the performance run uses deterministic **browser-only request interception**, isolated from the application and the recorded real-data demo. Three part models, 20,000 deliberately unsorted produces, and **800 FAILs** pass through the app's normal transform/render path.
+The live service returned a smaller dataset, so the performance run uses deterministic **browser-only request interception**, isolated from the application’s real backend. Three part models, 20,000 deliberately unsorted produces, and **800 FAILs** pass through the app's normal transform/render path.
 
 Evidence: [scripts/performance-result.json](scripts/performance-result.json).
 
@@ -57,14 +57,9 @@ npx --yes --package @playwright/cli playwright-cli -s=novigo-perf run-code --fil
 
 The script prints its measurement JSON. It creates an isolated fake session inside this browser only and intercepts API calls there; it never writes data to the backend.
 
-## Demo
-
-The checked-in [public/demo.webm](public/demo.webm) records the actual browser app with the supplied backend. The deployed `/demo.html` page provides a video player and download link. Chapter cards explain the workflow; audio is not required to follow it.
-
 ## Submission links
 
 - Repository: [thriftykapila/novigo-timeline-dashboard](https://github.com/thriftykapila/novigo-timeline-dashboard)
 - Deployment: [novigo-kappa.vercel.app](https://novigo-kappa.vercel.app)
-- Walkthrough: [demo player](https://novigo-kappa.vercel.app/demo.html)
 
-Vercel reports the deployment ready. Deployment authentication is disabled for this assignment project so reviewers can reach the app login and public video. Local browser and serverless-handler verification is reported above; no extra HTTP smoke request was made against the deployed URL.
+Vercel reports the deployment ready. Deployment authentication is disabled for this assignment project so reviewers can reach the app login. Local browser and serverless-handler verification is reported above; no extra HTTP smoke request was made against the deployed URL.

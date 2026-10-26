@@ -10,7 +10,7 @@
       "destination": "/api/proxy?path=:path*"
     },
     {
-      "source": "/((?!api/|assets/|favicon.svg|demo.webm|demo.html).*)",
+      "source": "/((?!api/|assets/|favicon.svg).*)",
       "destination": "/index.html"
     }
   ],

@@ -2,7 +2,7 @@
 
 React 18, TypeScript, Vite and MUI v6. Uses the assignment's real backend for login, production timelines and hourly summaries.
 
-[Live app](https://novigo-kappa.vercel.app) · [Demo video](https://novigo-kappa.vercel.app/demo.html)
+[Live app](https://novigo-kappa.vercel.app)
 
 ## Run
 
