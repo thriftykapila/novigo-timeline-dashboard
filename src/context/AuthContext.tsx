@@ -20,24 +20,29 @@ interface AuthState {
   signOut: () => Promise<void>;
   retryRestore: () => void;
 }
+
 const AuthContext = createContext<AuthState | null>(null);
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [restoring, setRestoring] = useState(true);
   const [restoreError, setRestoreError] = useState("");
   const [expired, setExpired] = useState(false);
-  const [attempt, setAttempt] = useState(0);
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
   const queryClient = useQueryClient();
-  const generation = useRef(0);
+  const operationVersion = useRef(0);
   const activeRequest = useRef<AbortController | null>(null);
+
   const beginOperation = useCallback(() => {
     activeRequest.current?.abort();
     const controller = new AbortController();
     activeRequest.current = controller;
-    return { id: ++generation.current, controller };
+    return { version: ++operationVersion.current, controller };
   }, []);
+
   useEffect(() => {
-    const { id, controller } = beginOperation();
+    const { version, controller } = beginOperation();
+
     async function restore() {
       setRestoring(true);
       setRestoreError("");
@@ -48,30 +53,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       try {
         const profile = await api.me(controller.signal);
-        if (!controller.signal.aborted && generation.current === id)
+        if (
+          !controller.signal.aborted &&
+          operationVersion.current === version
+        ) {
           setUser(profile);
+        }
       } catch (error) {
         if (
           !controller.signal.aborted &&
-          generation.current === id &&
+          operationVersion.current === version &&
           tokenStorage.get()
-        )
+        ) {
           setRestoreError(
             error instanceof Error
               ? error.message
               : "Could not validate your session.",
           );
+        }
       } finally {
-        if (!controller.signal.aborted && generation.current === id)
+        if (
+          !controller.signal.aborted &&
+          operationVersion.current === version
+        ) {
           setRestoring(false);
+        }
       }
     }
+
     void restore();
     return () => controller.abort();
-  }, [attempt, beginOperation]);
+  }, [restoreAttempt, beginOperation]);
+
   useEffect(() => {
-    const onExpired = () => {
-      ++generation.current;
+    const handleSessionExpired = () => {
+      ++operationVersion.current;
       activeRequest.current?.abort();
       setUser(null);
       setExpired(true);
@@ -79,20 +95,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRestoring(false);
       queryClient.clear();
     };
-    window.addEventListener("novigo:session-expired", onExpired);
+    window.addEventListener("novigo:session-expired", handleSessionExpired);
     return () =>
-      window.removeEventListener("novigo:session-expired", onExpired);
+      window.removeEventListener(
+        "novigo:session-expired",
+        handleSessionExpired,
+      );
   }, [queryClient]);
+
   useEffect(
     () => () => {
-      ++generation.current;
+      ++operationVersion.current;
       activeRequest.current?.abort();
     },
     [],
   );
+
   const signIn = useCallback(
     async (username: string, password: string) => {
-      const { id, controller } = beginOperation();
+      const { version, controller } = beginOperation();
       let signedInToken: string | null = null;
       try {
         const session = await api.login(username, password, controller.signal);
@@ -100,32 +121,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const profile = await api.me(controller.signal);
         if (
           controller.signal.aborted ||
-          generation.current !== id ||
+          operationVersion.current !== version ||
           tokenStorage.get() !== signedInToken
-        )
+        ) {
           throw new DOMException("Request cancelled", "AbortError");
+        }
+
         setExpired(false);
         setRestoreError("");
         setRestoring(false);
         setUser(profile);
       } catch (error) {
         if (
-          generation.current === id &&
+          operationVersion.current === version &&
           signedInToken &&
           tokenStorage.get() === signedInToken
-        )
+        ) {
           tokenStorage.clear();
+        }
         throw error;
       }
     },
     [beginOperation],
   );
+
   const signOut = useCallback(async () => {
-    const { id } = beginOperation();
+    const { version } = beginOperation();
     try {
       await api.logout();
     } finally {
-      if (generation.current === id) {
+      if (operationVersion.current === version) {
         tokenStorage.clear();
         queryClient.clear();
         setUser(null);
@@ -135,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [queryClient, beginOperation]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -144,13 +170,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         expired,
         signIn,
         signOut,
-        retryRestore: () => setAttempt((a) => a + 1),
+        retryRestore: () => setRestoreAttempt((attempt) => attempt + 1),
       }}
     >
       {children}
     </AuthContext.Provider>
   );
 }
+
 export function useAuth() {
   const value = useContext(AuthContext);
   if (!value) throw new Error("AuthProvider is required");

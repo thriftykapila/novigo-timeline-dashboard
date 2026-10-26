@@ -1,10 +1,7 @@
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
-/**
- * Same-origin transport for the assignment backend, which does not enable CORS.
- * Only the seven assignment endpoints are forwarded; tokens stay in the request.
- */
+// The backend needs a same-origin proxy because it does not enable CORS.
 export const allowedRoutes = {
   "auth/login": "POST",
   "auth/me": "GET",
@@ -18,6 +15,7 @@ export const allowedRoutes = {
 export default async function handler(request, response) {
   response.setHeader("Cache-Control", "no-store");
   response.setHeader("X-Content-Type-Options", "nosniff");
+
   const requestedPath = request.query.path;
   const path = Array.isArray(requestedPath)
     ? requestedPath.join("/")
@@ -33,25 +31,31 @@ export default async function handler(request, response) {
       .status(405)
       .json({ status_code: 405, message: "Method not allowed.", data: null });
   }
+
   const backend = (
     process.env.BACKEND_BASE_URL || "https://13.207.251.55.nip.io"
   ).replace(/\/$/, "");
   const headers = { Accept: "application/json" };
-  if (request.headers.authorization)
+  if (request.headers.authorization) {
     headers.Authorization = request.headers.authorization;
-  if (request.method === "POST") headers["Content-Type"] = "application/json";
+  }
+
   try {
+    let body;
+    if (request.method === "POST") {
+      headers["Content-Type"] = "application/json";
+      if (request.body != null) {
+        body =
+          typeof request.body === "string"
+            ? request.body
+            : JSON.stringify(request.body);
+      }
+    }
+
     const upstream = await fetch(`${backend}/${path}`, {
       method: request.method,
       headers,
-      ...(request.method === "POST" && request.body != null
-        ? {
-            body:
-              typeof request.body === "string"
-                ? request.body
-                : JSON.stringify(request.body),
-          }
-        : {}),
+      body,
       signal: AbortSignal.timeout(25_000),
       redirect: "error",
     });
@@ -61,21 +65,21 @@ export default async function handler(request, response) {
     );
     response.status(upstream.status);
     if (!upstream.body) return response.end();
-    // Stream with backpressure: exact produces can exceed Vercel's 4.5 MB
-    // buffered-response limit. Do not collect the payload with text()/json().
+    // Exact produces can exceed Vercel's 4.5 MB buffered-response limit.
     await pipeline(Readable.fromWeb(upstream.body), response);
   } catch (error) {
-    // A broken stream must terminate the connection. Appending a JSON error to
-    // an already-started JSON payload would corrupt the response further.
+    // Headers already went out, so a JSON error would corrupt the partial body.
     if (response.headersSent || response.destroyed) {
-      if (!response.destroyed)
+      if (!response.destroyed) {
         response.destroy(error instanceof Error ? error : undefined);
+      }
       return;
     }
-    const timeout = error?.name === "TimeoutError";
-    return response.status(timeout ? 504 : 502).json({
-      status_code: timeout ? 504 : 502,
-      message: timeout
+    const timedOut = error?.name === "TimeoutError";
+    const status = timedOut ? 504 : 502;
+    return response.status(status).json({
+      status_code: status,
+      message: timedOut
         ? "The production server timed out. Please retry."
         : "The production server is unavailable. Please retry.",
       data: null,

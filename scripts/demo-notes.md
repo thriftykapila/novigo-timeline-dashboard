@@ -1,8 +1,8 @@
 # Demo recording
 
-The submitted `public/demo.webm` is an actual browser walkthrough against the assignment backend. It covers login, hourly and exact modes, zoom/reset, the summary table, page reload with session restoration, a future empty shift and logout. Readable chapter cards explain the steps. The recording is 2:40, 1440 × 900 at 25 fps, approximately 13 MB; representative decoded frames were visually reviewed. Additional acceptance checks are recorded in `QA.md`.
+`public/demo.webm` walks through login, hourly and exact modes, zoom/reset, the summary table, session restoration after reload, an empty shift and logout against the assignment API. It runs for 2:40 at 1440 × 900, 25 fps. See `QA.md` for the other checks.
 
-To record another walkthrough, run the app locally and use a recent Playwright CLI:
+To record again, start the app locally and run:
 
 ```bash
 npx --yes --package @playwright/cli playwright-cli -s=novigo-demo open http://localhost:5173
@@ -11,8 +11,8 @@ npx --yes --package @playwright/cli playwright-cli -s=novigo-demo video-start pu
 npx --yes --package @playwright/cli playwright-cli -s=novigo-demo video-show-actions
 ```
 
-Take snapshots to get current element references, perform the actual workflow, and use `video-chapter` for explanatory cards. Stop with `video-stop`. The CLI may ask to install its matching browser or ffmpeg runtime.
+Use snapshots to find the current controls, walk through the app, and add chapter cards with `video-chapter`. Finish with `video-stop`. The CLI may need to install Chromium or ffmpeg first.
 
-`public/demo.html` hosts the video in an ordinary HTML player. Both video files and the HTML player are excluded from the SPA catch-all rewrite. Keep the video under GitHub's individual-file limit.
+`public/demo.html` plays the recording. Vercel serves both demo files directly, outside the app's route rewrite.
 
-The separate performance fixture in `performance-check.mjs` is for verification and is not used in this recording.
+`performance-check.mjs` runs separately; its generated data is not part of the demo.

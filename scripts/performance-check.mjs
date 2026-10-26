@@ -1,10 +1,10 @@
-// Browser-only, deterministic stress fixture. It does not modify the app or the backend.
-// Start the app with `npm run dev`, then run:
+// A 20,000-marker check using intercepted API responses in a separate browser session.
+// Start `npm run dev`, then run:
 // bash ~/.codex/skills/playwright/scripts/playwright_cli.sh -s=novigo-perf open http://localhost:5173
 // bash ~/.codex/skills/playwright/scripts/playwright_cli.sh -s=novigo-perf run-code --filename scripts/performance-check.mjs
-// The CLI prints the JSON result; the checked-in measurement is scripts/performance-result.json.
-async (page) => {
-  const baseURL = "http://localhost:5173";
+// The CLI prints the result. A saved run is in scripts/performance-result.json.
+async function checkChartPerformance(page) {
+  const baseUrl = "http://localhost:5173";
   const markerCount = 20_000;
   const failureEvery = 25;
   const expectedFailures = markerCount / failureEvery;
@@ -22,25 +22,21 @@ async (page) => {
       if (typeof PerformanceObserver !== "undefined") {
         try {
           new PerformanceObserver((list) => {
-            for (const entry of list.getEntries())
+            for (const entry of list.getEntries()) {
               window.__novigoPerformance.longTasks.push({
                 start: entry.startTime,
                 duration: entry.duration,
               });
+            }
           }).observe({ type: "longtask", buffered: true });
         } catch {
-          /* Long Tasks API is browser-dependent. */
+          // Some browsers do not support long-task measurements.
         }
       }
     },
-    { origin: new URL(baseURL).origin },
+    { origin: new URL(baseUrl).origin },
   );
-  const envelope = (data) => ({
-    trace_id: "deterministic-performance-fixture",
-    status_code: 200,
-    message: "OK",
-    data,
-  });
+
   let fixtureTimes = [];
   let fixtureWindow = null;
   const makeIntervals = (body) => {
@@ -48,17 +44,19 @@ async (page) => {
     const to = Date.parse(body.time_range.to_ts);
     fixtureWindow = { from, to };
     const groups = new Map();
+    const hourMs = 60 * 60 * 1000;
+    const istOffsetMs = 5.5 * hourMs;
     fixtureTimes = [];
     for (let index = 0; index < markerCount; index++) {
       const time =
         from + 1000 + (index * (to - from - 2000)) / (markerCount - 1);
       fixtureTimes.push(time);
       const bucketTime =
-        Math.floor((time + 19_800_000) / 3_600_000) * 3_600_000 - 19_800_000;
+        Math.floor((time + istOffsetMs) / hourMs) * hourMs - istOffsetMs;
       const bucketStart = new Date(bucketTime).toISOString();
       const partModel = ["D22", "D23", "D24"][index % 3];
       const key = `${bucketStart}:${partModel}`;
-      if (!groups.has(key))
+      if (!groups.has(key)) {
         groups.set(key, {
           bucket_start: bucketStart,
           part_model_id: partModel,
@@ -66,6 +64,7 @@ async (page) => {
           ng_count: 0,
           produces: [],
         });
+      }
       const group = groups.get(key);
       const result = index % failureEvery === 0 ? "FAIL" : "PASS";
       if (result === "FAIL") group.ng_count++;
@@ -78,34 +77,64 @@ async (page) => {
         part_model_id: partModel,
       });
     }
-    const segment = (a, b, type, name, field) => ({
-      start_at: new Date(from + (to - from) * a).toISOString(),
-      end_at: new Date(from + (to - from) * b).toISOString(),
-      type,
-      [field]: name,
-    });
+    const timeAt = (fraction) =>
+      new Date(from + (to - from) * fraction).toISOString();
     const buckets = [...groups.values()];
-    return {
+    const intervals = {
       machine_ids: ["isolated-performance-machine"],
       runtimes: [
-        segment(0, 0.125, "planned", null, "runtime_name"),
-        segment(0.14, 0.45, "planned", null, "runtime_name"),
-        segment(0.5, 0.78, "planned", null, "runtime_name"),
-        segment(
-          0.79,
-          0.82,
-          "unknown unplanned production",
-          null,
-          "runtime_name",
-        ),
-        segment(0.82, 1, "planned", null, "runtime_name"),
+        {
+          start_at: timeAt(0),
+          end_at: timeAt(0.125),
+          type: "planned",
+          runtime_name: null,
+        },
+        {
+          start_at: timeAt(0.14),
+          end_at: timeAt(0.45),
+          type: "planned",
+          runtime_name: null,
+        },
+        {
+          start_at: timeAt(0.5),
+          end_at: timeAt(0.78),
+          type: "planned",
+          runtime_name: null,
+        },
+        {
+          start_at: timeAt(0.79),
+          end_at: timeAt(0.82),
+          type: "unknown unplanned production",
+          runtime_name: null,
+        },
+        {
+          start_at: timeAt(0.82),
+          end_at: timeAt(1),
+          type: "planned",
+          runtime_name: null,
+        },
       ],
       downtimes: [
-        segment(0.125, 0.14, "unknown", "unknown", "downtime_name"),
-        segment(0.45, 0.5, "planned", "Lunch break", "downtime_name"),
+        {
+          start_at: timeAt(0.125),
+          end_at: timeAt(0.14),
+          type: "unknown",
+          downtime_name: "unknown",
+        },
+        {
+          start_at: timeAt(0.45),
+          end_at: timeAt(0.5),
+          type: "planned",
+          downtime_name: "Lunch break",
+        },
       ],
       stoppages: [
-        segment(0.78, 0.79, "stoppage", "Minor stoppage", "stoppage_name"),
+        {
+          start_at: timeAt(0.78),
+          end_at: timeAt(0.79),
+          type: "stoppage",
+          stoppage_name: "Minor stoppage",
+        },
       ],
       produce_counts: buckets.map(
         ({ bucket_start, part_model_id, ok_count, ng_count }) => ({
@@ -115,19 +144,19 @@ async (page) => {
           ng_count,
         }),
       ),
-      // Deliberately reverse both bucket and row order to exercise the real flatten/sort pipeline.
-      ...(body.exact_produces
-        ? {
-            produces: buckets
-              .map(({ bucket_start, part_model_id, produces }) => ({
-                bucket_start,
-                part_model_id,
-                produces: produces.reverse(),
-              }))
-              .reverse(),
-          }
-        : {}),
     };
+
+    // Unsorted input checks that the chart sorts both buckets and produces.
+    if (body.exact_produces) {
+      intervals.produces = buckets
+        .map(({ bucket_start, part_model_id, produces }) => ({
+          bucket_start,
+          part_model_id,
+          produces: produces.reverse(),
+        }))
+        .reverse();
+    }
+    return intervals;
   };
   await page.route("**/*", async (route) => {
     const request = route.request();
@@ -178,10 +207,15 @@ async (page) => {
     return route.fulfill({
       status: 200,
       headers,
-      body: JSON.stringify(envelope(data)),
+      body: JSON.stringify({
+        trace_id: "deterministic-performance-fixture",
+        status_code: 200,
+        message: "OK",
+        data,
+      }),
     });
   });
-  await page.goto(`${baseURL}/dashboard`);
+  await page.goto(`${baseUrl}/dashboard`);
   await page.getByTestId("timeline-canvas").waitFor();
   await page
     .getByRole("checkbox", { name: "Show individual produces" })
@@ -245,11 +279,11 @@ async (page) => {
       );
       const after = await readCanvas();
       const expectedFailMarkers = assertFailures(after);
-      const selected = await page
+      const descriptionIds = await page
         .locator(".timeline-interaction")
         .getAttribute("aria-describedby");
       const summary = await page
-        .locator(`[id="${selected.split(" ")[1]}"]`)
+        .locator(`[id="${descriptionIds.split(" ")[1]}"]`)
         .textContent();
       samples.push({
         iteration,
@@ -267,18 +301,18 @@ async (page) => {
     final.failMarkers !== expectedFailures
   )
     throw new Error("Reset zoom lost markers or FAILs.");
-  // Browser-side timings avoid counting the Playwright transport in hover response measurements.
+  // Measure hover inside the browser to exclude Playwright transport time.
   const hover = await page.evaluate(
     async ({ times, from, to }) => {
-      const target = document.querySelector(".timeline-interaction");
-      const base = document.querySelector('[data-testid="timeline-canvas"]');
-      const bounds = target.getBoundingClientRect();
+      const interaction = document.querySelector(".timeline-interaction");
+      const canvas = document.querySelector('[data-testid="timeline-canvas"]');
+      const bounds = interaction.getBoundingClientRect();
       const left = bounds.width < 540 ? 44 : 58;
       const right = bounds.width - 17;
       const top = 31;
       const bottom = bounds.height - 49;
       const maxY = 7500;
-      const revisionBefore = base.dataset.drawRevision;
+      const revisionBefore = canvas.dataset.drawRevision;
       const latencies = [];
       const handlerTimes = [];
       let visibleTooltips = 0;
@@ -288,7 +322,7 @@ async (page) => {
         const y =
           bottom - ((Math.floor(index / 3) + 1) / maxY) * (bottom - top);
         const started = performance.now();
-        target.dispatchEvent(
+        interaction.dispatchEvent(
           new PointerEvent("pointermove", {
             bubbles: true,
             clientX: bounds.left + x,
@@ -301,7 +335,7 @@ async (page) => {
           requestAnimationFrame(() => requestAnimationFrame(resolve)),
         );
         latencies.push(performance.now() - started);
-        handlerTimes.push(Number(target.dataset.hoverMs));
+        handlerTimes.push(Number(interaction.dataset.hoverMs));
         if (!document.querySelector(".timeline-tooltip").hidden)
           visibleTooltips++;
       }
@@ -317,7 +351,7 @@ async (page) => {
         handlerP95Ms: handlerTimes[Math.floor(handlerTimes.length * 0.95)],
         handlerMaxMs: handlerTimes[handlerTimes.length - 1],
         visibleTooltips,
-        baseCanvasUnchanged: base.dataset.drawRevision === revisionBefore,
+        baseCanvasUnchanged: canvas.dataset.drawRevision === revisionBefore,
       };
     },
     { times: fixtureTimes, ...fixtureWindow },
@@ -335,7 +369,7 @@ async (page) => {
     throw new Error(
       "Keyboard tooltip did not expose the first FAIL, IST time, and ID.",
     );
-  // Exercise real pointer brush input as well as the button zoom path.
+  // Drag a brush selection, then reset to the full shift.
   const bounds = await page.locator(".timeline-interaction").boundingBox();
   const beforeBrush = await readCanvas();
   await page.mouse.move(
@@ -409,4 +443,4 @@ async (page) => {
   };
   console.log(`PERFORMANCE_RESULT ${JSON.stringify(result)}`);
   return result;
-};
+}

@@ -1,9 +1,8 @@
 import { Writable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
-// The Vercel entry point is plain JavaScript so it needs no server build tooling.
 import handler from "../api/proxy.js";
 
-function response(slow = false) {
+function createResponse(slow = false) {
   const chunks: Buffer[] = [];
   let headersSent = false;
   const stream = new Writable({
@@ -31,7 +30,9 @@ function response(slow = false) {
     body: () => Buffer.concat(chunks).toString(),
   });
 }
+
 afterEach(() => vi.unstubAllGlobals());
+
 describe("same-origin production transport", () => {
   it("forwards only known endpoint/method pairs and carries bearer authorization", async () => {
     const fetch = vi
@@ -43,7 +44,7 @@ describe("same-origin production transport", () => {
         ),
       );
     vi.stubGlobal("fetch", fetch);
-    const res = response();
+    const res = createResponse();
     await handler(
       {
         query: { path: "auth/me" },
@@ -66,6 +67,7 @@ describe("same-origin production transport", () => {
     expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
     expect(JSON.parse(res.body()).data).toEqual({ name: "Operator" });
   });
+
   it("rejects arbitrary destinations and disallowed methods without making requests", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
@@ -74,19 +76,20 @@ describe("same-origin production transport", () => {
       ["../auth/login", "POST", 404],
       ["auth/login", "GET", 405],
     ] as const) {
-      const res = response();
+      const res = createResponse();
       await handler({ query: { path }, method, headers: {} }, res);
       expect(res.status).toHaveBeenCalledWith(status);
     }
     expect(fetch).not.toHaveBeenCalled();
   });
+
   it("preserves upstream rejection status and JSON payload", async () => {
     const payload = '{"status_code":401,"message":"Expired","data":null}';
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(new Response(payload, { status: 401 })),
     );
-    const res = response();
+    const res = createResponse();
     await handler(
       {
         query: { path: ["analytics-query"] },
@@ -99,12 +102,13 @@ describe("same-origin production transport", () => {
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.body()).toBe(payload);
   });
+
   it("returns a retryable JSON error when upstream is unavailable", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockRejectedValue(new TypeError("network unavailable")),
     );
-    const res = response();
+    const res = createResponse();
     await handler(
       { query: { path: "core/shifts" }, method: "GET", headers: {} },
       res,
@@ -114,6 +118,7 @@ describe("same-origin production transport", () => {
       expect.objectContaining({ status_code: 502 }),
     );
   });
+
   it("serializes analytics JSON and supports path segments supplied by the rewrite", async () => {
     const fetch = vi
       .fn()
@@ -128,7 +133,7 @@ describe("same-origin production transport", () => {
       },
       exact_produces: true,
     };
-    const res = response();
+    const res = createResponse();
     await handler(
       {
         query: { path: ["analytics-query", "machine-intervals"] },
@@ -151,6 +156,7 @@ describe("same-origin production transport", () => {
       }),
     );
   });
+
   it("returns a JSON 504 when the upstream deadline expires", async () => {
     vi.stubGlobal(
       "fetch",
@@ -160,7 +166,7 @@ describe("same-origin production transport", () => {
           new DOMException("Upstream deadline", "TimeoutError"),
         ),
     );
-    const res = response();
+    const res = createResponse();
     await handler(
       { query: { path: "core/shifts" }, method: "GET", headers: {} },
       res,
@@ -173,6 +179,7 @@ describe("same-origin production transport", () => {
       }),
     );
   });
+
   it("streams a 20,000-produce response larger than 4.5 MB across multiple writes without buffering upstream", async () => {
     const payload = JSON.stringify({
       status_code: 200,
@@ -207,7 +214,7 @@ describe("same-origin production transport", () => {
     );
     const text = vi.spyOn(upstream, "text");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(upstream));
-    const res = response(true);
+    const res = createResponse(true);
     await handler(
       {
         query: { path: "analytics-query/machine-intervals" },
@@ -223,12 +230,13 @@ describe("same-origin production transport", () => {
     expect(Buffer.concat(res.chunks).equals(Buffer.from(bytes))).toBe(true);
     expect(JSON.parse(res.body()).data.produces).toHaveLength(20_000);
   });
+
   it("ends a bodyless upstream response without attempting a stream", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
     );
-    const res = response();
+    const res = createResponse();
     await handler(
       { query: { path: "auth/logout" }, method: "POST", headers: {} },
       res,
@@ -237,6 +245,7 @@ describe("same-origin production transport", () => {
     expect(res.body()).toBe("");
     expect(res.writableEnded).toBe(true);
   });
+
   it("destroys a failed stream without appending an error envelope after headers", async () => {
     let first = true;
     const upstream = new Response(
@@ -255,7 +264,7 @@ describe("same-origin production transport", () => {
       }),
     );
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(upstream));
-    const res = response();
+    const res = createResponse();
     await handler(
       { query: { path: "core/shifts" }, method: "GET", headers: {} },
       res,

@@ -18,32 +18,40 @@ export default function Login() {
   const { user, signIn, expired } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [visible, setVisible] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const usernameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
+  const usernameMissing = hasSubmitted && !username.trim();
+  const passwordMissing = hasSubmitted && !password;
+
   if (user) return <Navigate to="/dashboard" replace />;
-  async function submit(event: FormEvent) {
+
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    setSubmitted(true);
-    setError("");
-    if (!username.trim() || !password) {
-      (!username.trim() ? usernameRef : passwordRef).current?.focus();
+    setHasSubmitted(true);
+    setErrorMessage("");
+    if (!username.trim()) {
+      usernameRef.current?.focus();
       return;
     }
-    setBusy(true);
+    if (!password) {
+      passwordRef.current?.focus();
+      return;
+    }
+    setIsSubmitting(true);
     try {
       await signIn(username.trim(), password);
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
           : "Unable to sign in. Please try again.",
       );
     } finally {
-      setBusy(false);
+      setIsSubmitting(false);
     }
   }
   return (
@@ -72,11 +80,11 @@ export default function Login() {
               <span className="story-live">SHIFT OVERVIEW</span>
             </div>
             <div className="story-plot">
-              <div className="story-band b1" />
-              <div className="story-band b2" />
-              <div className="story-band b3" />
-              <div className="story-band b4" />
-              <div className="story-band b5" />
+              <div className="story-band story-run-start" />
+              <div className="story-band story-downtime" />
+              <div className="story-band story-run-middle" />
+              <div className="story-band story-break" />
+              <div className="story-band story-run-end" />
               <svg viewBox="0 0 440 150" preserveAspectRatio="none">
                 <path
                   d="M0 140 L45 128 L80 105 L125 101 L170 78 L220 70 L260 45 L310 37 L360 18 L440 5"
@@ -149,50 +157,52 @@ export default function Login() {
               Your session has expired. Please sign in again.
             </Alert>
           )}
-          {error && (
+          {errorMessage && (
             <Alert severity="error" className="login-alert" role="alert">
-              {error}
+              {errorMessage}
             </Alert>
           )}
-          <form onSubmit={submit} noValidate>
+          <form onSubmit={handleSubmit} noValidate>
             <TextField
               label="Username"
               name="username"
               inputRef={usernameRef}
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(event) => setUsername(event.target.value)}
               autoComplete="username"
               fullWidth
-              disabled={busy}
-              error={submitted && !username.trim()}
-              helperText={
-                submitted && !username.trim() ? "Enter your username." : " "
-              }
+              disabled={isSubmitting}
+              error={usernameMissing}
+              helperText={usernameMissing ? "Enter your username." : " "}
               required
             />
             <TextField
               label="Password"
               name="password"
               inputRef={passwordRef}
-              type={visible ? "text" : "password"}
+              type={showPassword ? "text" : "password"}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
               fullWidth
-              disabled={busy}
-              error={submitted && !password}
-              helperText={submitted && !password ? "Enter your password." : " "}
+              disabled={isSubmitting}
+              error={passwordMissing}
+              helperText={passwordMissing ? "Enter your password." : " "}
               required
               slotProps={{
                 input: {
                   endAdornment: (
                     <InputAdornment position="end">
                       <IconButton
-                        aria-label={visible ? "Hide password" : "Show password"}
-                        onClick={() => setVisible((v) => !v)}
+                        aria-label={
+                          showPassword ? "Hide password" : "Show password"
+                        }
+                        onClick={() =>
+                          setShowPassword((isVisible) => !isVisible)
+                        }
                         edge="end"
                       >
-                        {visible ? (
+                        {showPassword ? (
                           <VisibilityOffOutlined />
                         ) : (
                           <VisibilityOutlined />
@@ -208,16 +218,16 @@ export default function Login() {
               variant="contained"
               fullWidth
               size="large"
-              disabled={busy}
+              disabled={isSubmitting}
               endIcon={
-                busy ? (
+                isSubmitting ? (
                   <CircularProgress size={18} color="inherit" />
                 ) : (
                   <ArrowForwardRounded />
                 )
               }
             >
-              {busy ? "Signing in…" : "Sign in"}
+              {isSubmitting ? "Signing in…" : "Sign in"}
             </Button>
           </form>
           <div className="login-help">

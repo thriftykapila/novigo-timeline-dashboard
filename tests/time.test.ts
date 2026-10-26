@@ -18,6 +18,7 @@ describe("IST shift windows", () => {
       shift_timings: ["00:30", "12:30"],
     },
   ];
+
   it("derives every shift from API start times, including midnight wrapping", () => {
     const options = buildShiftOptions(shifts);
     expect(options.map(({ start, end }) => [start, end])).toEqual([
@@ -33,6 +34,7 @@ describe("IST shift windows", () => {
       to_ts: "2026-09-01T19:00:00.000Z",
     });
   });
+
   it("formats UTC timestamps on the IST day, independent of host timezone", () => {
     const timestamp = Date.parse("2026-08-31T19:00:15Z");
     expect(formatDate(timestamp)).toBe("01 Sept 2026");
@@ -42,6 +44,7 @@ describe("IST shift windows", () => {
       "2026-08-31T18:30:00.000Z",
     );
   });
+
   it("supports a single start time as a full day, filters inactive shifts and invalid clocks", () => {
     const options = buildShiftOptions([
       { ...shifts[0], shift_timings: ["06:00", "invalid", "06:00"] },

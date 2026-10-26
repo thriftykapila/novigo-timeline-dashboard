@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import Alert from "@mui/material/Alert";
 import Avatar from "@mui/material/Avatar";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
@@ -30,6 +29,7 @@ import {
   formatDate,
   formatTime,
   getShiftWindow,
+  floorISTHour,
 } from "../lib/time";
 import {
   buildChartPoints,
@@ -41,20 +41,23 @@ import Brand from "./Brand";
 import HourlySummary from "./HourlySummary";
 import TimelineChart from "./TimelineChart";
 
-const number = (n: number) => n.toLocaleString("en-IN");
-const errorText = (error: unknown) =>
-  error instanceof Error
+const formatCount = (value: number) => value.toLocaleString("en-IN");
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error
     ? error.message
     : "We could not load production data. Please try again.";
+}
+
 export default function Dashboard() {
   const { user, signOut } = useAuth();
-  const [assetId, setAssetId] = useState("");
-  const [shiftId, setShiftId] = useState("");
+  const [selectedAssetId, setSelectedAssetId] = useState("");
+  const [selectedShiftId, setSelectedShiftId] = useState("");
   const [date, setDate] = useState("2026-09-01");
-  const [individual, setIndividual] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [logoutError, setLogoutError] = useState("");
-  const metadata = useQuery({
+  const [showIndividual, setShowIndividual] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const workspaceQuery = useQuery({
     queryKey: ["metadata"],
     queryFn: async ({ signal }) => {
       const [assets, shifts] = await Promise.all([
@@ -65,110 +68,139 @@ export default function Dashboard() {
     },
     staleTime: 300_000,
   });
+
   const assets = useMemo(
-    () => flattenAssets(metadata.data?.assets ?? []),
-    [metadata.data?.assets],
+    () => flattenAssets(workspaceQuery.data?.assets ?? []),
+    [workspaceQuery.data?.assets],
   );
   const shifts = useMemo(
-    () => buildShiftOptions(metadata.data?.shifts ?? []),
-    [metadata.data?.shifts],
+    () => buildShiftOptions(workspaceQuery.data?.shifts ?? []),
+    [workspaceQuery.data?.shifts],
   );
-  const asset =
-    assets.find((a) => a.id === assetId) ??
-    assets.find((a) => /line\s*1\s*spi/i.test(a.name)) ??
-    assets.find((a) => !a.children?.length) ??
+  const selectedAsset =
+    assets.find((asset) => asset.id === selectedAssetId) ??
+    assets.find((asset) => /line\s*1\s*spi/i.test(asset.name)) ??
+    assets.find((asset) => !asset.children?.length) ??
     assets[0];
-  const shift = shifts.find((s) => s.id === shiftId) ?? shifts[0];
-  const validDate =
+  const selectedShift =
+    shifts.find((shift) => shift.id === selectedShiftId) ?? shifts[0];
+  const isValidDate =
     /^\d{4}-\d{2}-\d{2}$/.test(date) &&
     Number.isFinite(Date.parse(`${date}T00:00:00+05:30`));
   const timeWindow = useMemo(
-    () => (validDate && shift ? getShiftWindow(date, shift) : null),
-    [date, shift, validDate],
+    () =>
+      isValidDate && selectedShift ? getShiftWindow(date, selectedShift) : null,
+    [date, selectedShift, isValidDate],
   );
-  const analytics = useQuery({
+
+  const productionQuery = useQuery({
     queryKey: [
       "analytics",
-      asset?.id,
-      asset?.assetlevel_id,
+      selectedAsset?.id,
+      selectedAsset?.assetlevel_id,
       timeWindow?.from_ts,
       timeWindow?.to_ts,
-      individual,
+      showIndividual,
     ],
-    enabled: !!asset && !!timeWindow,
+    enabled: Boolean(selectedAsset && timeWindow),
     queryFn: async ({ signal }) => {
+      if (!selectedAsset || !timeWindow)
+        throw new Error("Choose a machine, date and shift.");
       const [intervals, cycles] = await Promise.all([
-        api.intervals(asset!, timeWindow!, individual, signal),
-        api.cycles(asset!, timeWindow!, signal),
+        api.intervals(selectedAsset, timeWindow, showIndividual, signal),
+        api.cycles(selectedAsset, timeWindow, signal),
       ]);
       return { intervals, cycles, observedAt: Date.now() };
     },
     staleTime: 60_000,
   });
-  const now = analytics.data?.observedAt ?? Date.now();
-  const segments = useMemo(
-    () =>
-      analytics.data && timeWindow
-        ? normalizeSegments(analytics.data.intervals, timeWindow, now)
-        : [],
-    [analytics.data, timeWindow, now],
-  );
-  const points = useMemo(
-    () =>
-      analytics.data && timeWindow
-        ? buildChartPoints(
-            analytics.data.intervals,
-            individual,
-            timeWindow,
-            now,
-          )
-        : [],
-    [analytics.data, individual, timeWindow, now],
-  );
-  const hours = useMemo(
-    () =>
-      analytics.data && timeWindow
-        ? buildHourlySummary(
-            analytics.data.intervals,
-            analytics.data.cycles,
-            segments,
-            timeWindow,
-            now,
-          )
-        : [],
-    [analytics.data, segments, timeWindow, now],
-  );
+  const production = productionQuery.data;
+  const observedAt = production?.observedAt ?? Date.now();
+
+  // Use the same clipped intervals and observation time for the chart and table.
+  const { segments, points, hours } = useMemo(() => {
+    if (!production || !timeWindow)
+      return { segments: [], points: [], hours: [] };
+    const segments = normalizeSegments(
+      production.intervals,
+      timeWindow,
+      production.observedAt,
+    );
+    const points = buildChartPoints(
+      production.intervals,
+      showIndividual,
+      timeWindow,
+      production.observedAt,
+    );
+    const hours = buildHourlySummary(
+      production.intervals,
+      production.cycles,
+      segments,
+      timeWindow,
+      production.observedAt,
+    );
+    return { segments, points, hours };
+  }, [production, timeWindow, showIndividual]);
+
   const counts = hours.reduce(
-    (a, h) => ({
-      total: a.total + (h.total ?? 0),
-      pass: a.pass + (h.pass ?? 0),
-      fail: a.fail + (h.fail ?? 0),
+    (totals, hour) => ({
+      total: totals.total + (hour.total ?? 0),
+      pass: totals.pass + (hour.pass ?? 0),
+      fail: totals.fail + (hour.fail ?? 0),
     }),
     { total: 0, pass: 0, fail: 0 },
   );
-  const hasData = !!(segments.length || points.length || counts.total);
-  const unknown = segments.filter((s) => s.kind === "unknown");
-  const unknownMinutes = unknown.reduce(
-    (a, s) => a + (s.end - s.start) / 60_000,
+  const hasData = segments.length > 0 || points.length > 0 || counts.total > 0;
+  const unknownSegments = segments.filter(
+    (segment) => segment.kind === "unknown",
+  );
+  const unknownMinutes = unknownSegments.reduce(
+    (minutes, segment) => minutes + (segment.end - segment.start) / 60_000,
     0,
   );
-  const yieldPercent = counts.total
+  const passRate = counts.total
     ? ((counts.pass / counts.total) * 100).toFixed(1)
     : "—";
-  const inProgress =
-    !!timeWindow && timeWindow.from <= now && timeWindow.to > now;
-  const pending =
-    metadata.isPending || (!!asset && !!timeWindow && analytics.isPending);
-  async function logout() {
-    setLoggingOut(true);
+  const lastPoint = points.at(-1);
+  const isInProgress = Boolean(
+    timeWindow && timeWindow.from <= observedAt && timeWindow.to > observedAt,
+  );
+  const isLoading =
+    workspaceQuery.isPending ||
+    Boolean(selectedAsset && timeWindow && productionQuery.isPending);
+  const noOptions =
+    !workspaceQuery.isPending &&
+    !workspaceQuery.isError &&
+    (!assets.length || !shifts.length);
+  const isOvernight =
+    timeWindow && formatDate(timeWindow.from) !== formatDate(timeWindow.to);
+  const userInitials = (user?.name || user?.username || "U")
+    .split(" ")
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("");
+  const sourceHourOffsets =
+    production?.intervals.produce_counts.some((row) => {
+      const bucketStart = Date.parse(row.bucket_start);
+      return floorISTHour(bucketStart) !== bucketStart;
+    }) ?? false;
+
+  let refreshStatus = "Select your production window";
+  if (productionQuery.isFetching) refreshStatus = "Fetching production data…";
+  else if (production)
+    refreshStatus = `Updated at ${formatTime(production.observedAt, true)}`;
+
+  async function handleLogout() {
+    setIsLoggingOut(true);
     try {
       await signOut();
     } catch {
-      setLogoutError("Your local session has been cleared.");
+      // signOut clears the local session even when the server cannot be reached.
     } finally {
-      setLoggingOut(false);
+      setIsLoggingOut(false);
     }
   }
+
   return (
     <div className="app-layout">
       <a className="skip-link" href="#main-content">
@@ -195,21 +227,17 @@ export default function Dashboard() {
               fontWeight: 700,
             }}
           >
-            {(user?.name || user?.username || "U")
-              .split(" ")
-              .map((s) => s[0])
-              .slice(0, 2)
-              .join("")}
+            {userInitials}
           </Avatar>
           <Tooltip title="Sign out">
             <Button
-              onClick={logout}
-              disabled={loggingOut}
+              onClick={handleLogout}
+              disabled={isLoggingOut}
               aria-label="Sign out"
               className="logout-button"
               color="inherit"
             >
-              {loggingOut ? (
+              {isLoggingOut ? (
                 <CircularProgress size={18} />
               ) : (
                 <LogoutRounded fontSize="small" />
@@ -245,7 +273,6 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-          {logoutError && <Alert severity="info">{logoutError}</Alert>}
           <section
             className="surface filter-card"
             aria-label="Production filters"
@@ -254,20 +281,20 @@ export default function Dashboard() {
               <FormControl
                 size="small"
                 fullWidth
-                disabled={metadata.isPending || !assets.length}
+                disabled={workspaceQuery.isPending || !assets.length}
               >
                 <InputLabel id="asset-label">Machine / line</InputLabel>
                 <Select
                   labelId="asset-label"
                   label="Machine / line"
-                  value={asset?.id ?? ""}
-                  onChange={(e) => setAssetId(e.target.value)}
+                  value={selectedAsset?.id ?? ""}
+                  onChange={(event) => setSelectedAssetId(event.target.value)}
                 >
-                  {assets.map((a) => (
-                    <MenuItem value={a.id} key={a.id}>
-                      <span className="asset-option" title={a.path}>
-                        {a.name}
-                        <small>{a.path}</small>
+                  {assets.map((assetOption) => (
+                    <MenuItem value={assetOption.id} key={assetOption.id}>
+                      <span className="asset-option" title={assetOption.path}>
+                        {assetOption.name}
+                        <small>{assetOption.path}</small>
                       </span>
                     </MenuItem>
                   ))}
@@ -278,7 +305,7 @@ export default function Dashboard() {
                 type="date"
                 size="small"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={(event) => setDate(event.target.value)}
                 slotProps={{
                   inputLabel: { shrink: true },
                   htmlInput: {
@@ -287,24 +314,24 @@ export default function Dashboard() {
                     max: "2100-12-31",
                   },
                 }}
-                error={!validDate}
+                error={!isValidDate}
                 fullWidth
               />
               <FormControl
                 size="small"
                 fullWidth
-                disabled={metadata.isPending || !shifts.length}
+                disabled={workspaceQuery.isPending || !shifts.length}
               >
                 <InputLabel id="shift-label">Shift</InputLabel>
                 <Select
                   labelId="shift-label"
                   label="Shift"
-                  value={shift?.id ?? ""}
-                  onChange={(e) => setShiftId(e.target.value)}
+                  value={selectedShift?.id ?? ""}
+                  onChange={(event) => setSelectedShiftId(event.target.value)}
                 >
-                  {shifts.map((s) => (
-                    <MenuItem value={s.id} key={s.id}>
-                      {s.label}
+                  {shifts.map((shiftOption) => (
+                    <MenuItem value={shiftOption.id} key={shiftOption.id}>
+                      {shiftOption.label}
                     </MenuItem>
                   ))}
                 </Select>
@@ -313,25 +340,27 @@ export default function Dashboard() {
                 variant="outlined"
                 className="refresh-button"
                 startIcon={
-                  analytics.isFetching ? (
+                  productionQuery.isFetching ? (
                     <CircularProgress size={16} />
                   ) : (
                     <RefreshRounded />
                   )
                 }
-                onClick={() => void analytics.refetch()}
-                disabled={!asset || !timeWindow || analytics.isFetching}
+                onClick={() => void productionQuery.refetch()}
+                disabled={
+                  !selectedAsset || !timeWindow || productionQuery.isFetching
+                }
               >
                 Refresh
               </Button>
             </div>
             <div className="filter-context">
               <div className="filter-tags">
-                {asset && (
+                {selectedAsset && (
                   <Chip
                     size="small"
                     icon={<PrecisionManufacturingOutlined />}
-                    label={asset.name}
+                    label={selectedAsset.name}
                     className="asset-chip"
                   />
                 )}
@@ -339,35 +368,28 @@ export default function Dashboard() {
                   <span className="window-chip">
                     {formatDate(timeWindow.from)} ·{" "}
                     {formatTime(timeWindow.from)}–{formatTime(timeWindow.to)}{" "}
-                    {formatDate(timeWindow.from) !== formatDate(timeWindow.to)
-                      ? "(+1 day)"
-                      : ""}
+                    {isOvernight ? "(+1 day)" : ""}
                   </span>
                 )}
                 <span className="timezone-chip">IST · UTC+05:30</span>
               </div>
-              <span className="refresh-status">
-                {analytics.isFetching
-                  ? "Fetching production data…"
-                  : analytics.data
-                    ? `Updated at ${formatTime(analytics.data.observedAt, true)}`
-                    : "Select your production window"}
-              </span>
+              <span className="refresh-status">{refreshStatus}</span>
             </div>
           </section>
-          {metadata.isError ? (
+          {workspaceQuery.isError ? (
             <section className="surface state-panel">
               <ErrorOutlineRounded className="state-icon" />
               <h2>Could not load your workspace</h2>
-              <p>{errorText(metadata.error)}</p>
+              <p>{getErrorMessage(workspaceQuery.error)}</p>
               <Button
                 variant="contained"
-                onClick={() => void metadata.refetch()}
+                onClick={() => void workspaceQuery.refetch()}
               >
                 Try again
               </Button>
             </section>
-          ) : !metadata.isPending && (!assets.length || !shifts.length) ? (
+          ) : null}
+          {noOptions && (
             <section className="surface state-panel">
               <InfoOutlined className="state-icon" />
               <h2>No {assets.length ? "active shifts" : "assets"} available</h2>
@@ -376,13 +398,13 @@ export default function Dashboard() {
               </p>
               <Button
                 variant="outlined"
-                onClick={() => void metadata.refetch()}
+                onClick={() => void workspaceQuery.refetch()}
               >
                 Retry
               </Button>
             </section>
-          ) : null}
-          {pending && (
+          )}
+          {isLoading && (
             <section
               className="surface loading-panel"
               aria-live="polite"
@@ -396,148 +418,151 @@ export default function Dashboard() {
               </div>
             </section>
           )}
-          {analytics.isError && !pending && (
+          {productionQuery.isError && !isLoading && (
             <section className="surface state-panel" role="alert">
               <ErrorOutlineRounded className="state-icon" />
               <h2>Production data is unavailable</h2>
-              <p>{errorText(analytics.error)}</p>
+              <p>{getErrorMessage(productionQuery.error)}</p>
               <Button
                 variant="contained"
                 startIcon={<RefreshRounded />}
-                onClick={() => void analytics.refetch()}
-                disabled={analytics.isFetching}
+                onClick={() => void productionQuery.refetch()}
+                disabled={productionQuery.isFetching}
               >
                 Retry data request
               </Button>
             </section>
           )}
-          {analytics.data && !analytics.isError && !pending && timeWindow && (
-            <>
-              <section
-                className="surface production-card"
-                aria-labelledby="production-title"
-              >
-                <div className="section-heading production-heading">
-                  <div>
-                    <div className="title-with-icon">
-                      <TimelineRounded />
-                      <h2 id="production-title">Production History</h2>
-                      {inProgress && (
-                        <Chip
-                          size="small"
-                          label="In progress"
-                          color="success"
-                          variant="outlined"
-                        />
-                      )}
+          {productionQuery.data &&
+            !productionQuery.isError &&
+            !isLoading &&
+            timeWindow && (
+              <>
+                <section
+                  className="surface production-card"
+                  aria-labelledby="production-title"
+                >
+                  <div className="section-heading production-heading">
+                    <div>
+                      <div className="title-with-icon">
+                        <TimelineRounded />
+                        <h2 id="production-title">Production History</h2>
+                        {isInProgress && (
+                          <Chip
+                            size="small"
+                            label="In progress"
+                            color="success"
+                            variant="outlined"
+                          />
+                        )}
+                      </div>
+                      <p>
+                        {selectedAsset?.name}{" "}
+                        <span className="inline-divider">/</span>{" "}
+                        {formatDate(timeWindow.from)}{" "}
+                        <span className="inline-divider">/</span>{" "}
+                        {formatTime(timeWindow.from)}–
+                        {formatTime(timeWindow.to)} IST
+                      </p>
                     </div>
-                    <p>
-                      {asset?.name} <span className="inline-divider">/</span>{" "}
-                      {formatDate(timeWindow.from)}{" "}
-                      <span className="inline-divider">/</span>{" "}
-                      {formatTime(timeWindow.from)}–{formatTime(timeWindow.to)}{" "}
-                      IST
-                    </p>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={showIndividual}
+                          onChange={(event) =>
+                            setShowIndividual(event.target.checked)
+                          }
+                          inputProps={{
+                            "aria-label": "Show individual produces",
+                          }}
+                        />
+                      }
+                      label="Show individual produces"
+                      className="individual-toggle"
+                    />
                   </div>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        size="small"
-                        checked={individual}
-                        onChange={(e) => setIndividual(e.target.checked)}
-                        inputProps={{
-                          "aria-label": "Show individual produces",
-                        }}
-                      />
-                    }
-                    label="Show individual produces"
-                    className="individual-toggle"
-                  />
-                </div>
-                <div className="production-metrics">
-                  <div>
-                    <span className="metric-label">
-                      <BarChartRounded />
-                      Total production
+                  <div className="production-metrics">
+                    <div>
+                      <span className="metric-label">
+                        <BarChartRounded />
+                        Total production
+                      </span>
+                      <strong>
+                        {formatCount(counts.total)} <small>parts</small>
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="metric-label">
+                        <CheckCircleOutlineRounded />
+                        Pass
+                      </span>
+                      <strong className="pass-value">
+                        {formatCount(counts.pass)} <small>parts</small>
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="metric-label">
+                        <ErrorOutlineRounded />
+                        Fail
+                      </span>
+                      <strong className="fail-value">
+                        {formatCount(counts.fail)} <small>parts</small>
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="metric-label">Pass rate</span>
+                      <strong>
+                        {passRate}
+                        <small>{counts.total ? "%" : ""}</small>
+                      </strong>
+                    </div>
+                  </div>
+                  {hasData ? (
+                    <TimelineChart
+                      key={`${selectedAsset?.id}:${timeWindow.from}:${showIndividual}`}
+                      segments={segments}
+                      points={points}
+                      window={timeWindow}
+                      individual={showIndividual}
+                      loading={productionQuery.isFetching}
+                    />
+                  ) : (
+                    <div className="empty-chart">
+                      <TimelineRounded />
+                      <h3>No production data for this shift</h3>
+                      <p>
+                        Try Line1 SPI on a date between 1 and 7 September 2026.
+                      </p>
+                    </div>
+                  )}
+                  <div className="production-footnote">
+                    <span
+                      className={
+                        unknownSegments.length ? "unknown-note" : "clear-note"
+                      }
+                    >
+                      <InfoOutlined />
+                      {unknownSegments.length
+                        ? `${unknownSegments.length} unknown segment${unknownSegments.length === 1 ? "" : "s"} · ${unknownMinutes.toFixed(1)} min downtime`
+                        : "No unknown downtime in this shift"}
                     </span>
-                    <strong>
-                      {number(counts.total)} <small>parts</small>
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="metric-label">
-                      <CheckCircleOutlineRounded />
-                      Pass
+                    <span>
+                      {showIndividual
+                        ? `${formatCount(points.length)} individual produces`
+                        : "Hourly production counts"}
+                      {lastPoint
+                        ? ` · Last observed ${formatTime(lastPoint.time, true)} IST`
+                        : ""}
                     </span>
-                    <strong className="pass-value">
-                      {number(counts.pass)} <small>parts</small>
-                    </strong>
                   </div>
-                  <div>
-                    <span className="metric-label">
-                      <ErrorOutlineRounded />
-                      Fail
-                    </span>
-                    <strong className="fail-value">
-                      {number(counts.fail)} <small>parts</small>
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="metric-label">Pass rate</span>
-                    <strong>
-                      {yieldPercent}
-                      <small>{counts.total ? "%" : ""}</small>
-                    </strong>
-                  </div>
-                </div>
-                {hasData ? (
-                  <TimelineChart
-                    key={`${asset?.id}:${timeWindow.from}:${individual}`}
-                    segments={segments}
-                    points={points}
-                    window={timeWindow}
-                    individual={individual}
-                    loading={analytics.isFetching}
-                  />
-                ) : (
-                  <div className="empty-chart">
-                    <TimelineRounded />
-                    <h3>No production data for this shift</h3>
-                    <p>
-                      Try Line1 SPI on a date between 1 and 7 September 2026.
-                    </p>
-                  </div>
-                )}
-                <div className="production-footnote">
-                  <span
-                    className={unknown.length ? "unknown-note" : "clear-note"}
-                  >
-                    <InfoOutlined />
-                    {unknown.length
-                      ? `${unknown.length} unknown segment${unknown.length === 1 ? "" : "s"} · ${unknownMinutes.toFixed(1)} min downtime`
-                      : "No unknown downtime in this shift"}
-                  </span>
-                  <span>
-                    {individual
-                      ? `${number(points.length)} individual produces`
-                      : "Hourly production counts"}
-                    {points.length
-                      ? ` · Last observed ${formatTime(points[points.length - 1].time, true)} IST`
-                      : ""}
-                  </span>
-                </div>
-              </section>
-              <HourlySummary
-                hours={hours}
-                sourceHourOffsets={analytics.data.intervals.produce_counts.some(
-                  (row) =>
-                    (Date.parse(row.bucket_start) + 330 * 60_000) %
-                      3_600_000 !==
-                    0,
-                )}
-              />
-            </>
-          )}
+                </section>
+                <HourlySummary
+                  hours={hours}
+                  sourceHourOffsets={sourceHourOffsets}
+                />
+              </>
+            )}
           <footer className="dashboard-footer">
             <span>
               Novigo Analytics <span className="footer-dot">·</span> Production

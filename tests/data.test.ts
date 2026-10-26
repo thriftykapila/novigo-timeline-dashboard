@@ -15,7 +15,9 @@ const window = getShiftWindow("2026-09-01", {
   end: "11:30",
 });
 const timestamp = (clock: string) => `2026-09-01T${clock}:00+05:30`;
-const data = (patch: Partial<MachineIntervals> = {}): MachineIntervals => ({
+const makeIntervals = (
+  patch: Partial<MachineIntervals> = {},
+): MachineIntervals => ({
   machine_ids: [1],
   runtimes: [],
   downtimes: [],
@@ -26,7 +28,7 @@ const data = (patch: Partial<MachineIntervals> = {}): MachineIntervals => ({
 
 describe("shared timeline and hourly preparation", () => {
   it("clips valid segments to the window and now, drops invalid intervals, and keeps runtime kinds separate", () => {
-    const source = data({
+    const source = makeIntervals({
       runtimes: [
         {
           start_at: timestamp("08:00"),
@@ -68,8 +70,9 @@ describe("shared timeline and hourly preparation", () => {
       true,
     ]);
   });
+
   it("keeps subsequent hours blank and caps an in-progress hour at now", () => {
-    const source = data({
+    const source = makeIntervals({
       downtimes: [
         {
           start_at: timestamp("08:00"),
@@ -89,8 +92,9 @@ describe("shared timeline and hourly preparation", () => {
     expect(hours.map((hour) => hour.unknown)).toEqual([30, 10, null, null]);
     expect(hours.map((hour) => hour.total)).toEqual([0, 0, null, null]);
   });
+
   it("assigns UTC bucket starts to IST clock hours, sums models and preserves a partial leading bucket", () => {
-    const source = data({
+    const source = makeIntervals({
       produce_counts: [
         {
           bucket_start: "2026-09-01T03:00:00Z",
@@ -133,7 +137,7 @@ describe("shared timeline and hourly preparation", () => {
       start: "06:00",
       end: "07:00",
     });
-    const leading = data({
+    const leading = makeIntervals({
       produce_counts: [
         {
           bucket_start: "2026-09-01T00:00:00Z",
@@ -148,6 +152,7 @@ describe("shared timeline and hourly preparation", () => {
       buildChartPoints(leading, false, six, six.to).map((point) => point.count),
     ).toEqual([5, 1]);
   });
+
   it("splits UTC intervals across IST midnight and keeps the new day’s clock hours", () => {
     const night = getShiftWindow("2026-09-01", {
       id: "",
@@ -155,7 +160,7 @@ describe("shared timeline and hourly preparation", () => {
       start: "23:30",
       end: "01:30",
     });
-    const source = data({
+    const source = makeIntervals({
       runtimes: [
         {
           start_at: "2026-09-01T18:00:00Z",
@@ -178,8 +183,9 @@ describe("shared timeline and hourly preparation", () => {
     ]);
     expect(hours.map((hour) => hour.runtime)).toEqual([30, 60, 30]);
   });
+
   it("sorts individual rows across buckets and preserves every FAIL with per-model cumulative totals", () => {
-    const source = data({
+    const source = makeIntervals({
       produces: [
         {
           bucket_start: timestamp("08:00"),
@@ -232,10 +238,13 @@ describe("shared timeline and hourly preparation", () => {
       ["later-fail", 2],
     ]);
     expect(points.filter((point) => point.result === "FAIL")).toHaveLength(1);
-    expect(buildChartPoints(data(), true, window, window.to)).toEqual([]);
+    expect(buildChartPoints(makeIntervals(), true, window, window.to)).toEqual(
+      [],
+    );
   });
+
   it("produces both coarse result types and independent model totals", () => {
-    const source = data({
+    const source = makeIntervals({
       produce_counts: [
         {
           bucket_start: timestamp("09:00"),
@@ -264,6 +273,7 @@ describe("shared timeline and hourly preparation", () => {
         .map((point) => point.cumulative),
     ).toEqual([3, 5]);
   });
+
   it("flattens an asset hierarchy with the correct entity level and breadcrumb", () => {
     const assets = flattenAssets([
       {
@@ -280,8 +290,9 @@ describe("shared timeline and hourly preparation", () => {
       path: "Plant / SPI",
     });
   });
+
   it("accounts for each elapsed minute exactly once when API segments are tiled", () => {
-    const source = data({
+    const source = makeIntervals({
       runtimes: [
         {
           start_at: timestamp("08:30"),
@@ -325,8 +336,9 @@ describe("shared timeline and hourly preparation", () => {
       );
     }
   });
+
   it("preserves source overlaps so chart and table share the same facts", () => {
-    const source = data({
+    const source = makeIntervals({
       runtimes: [
         {
           start_at: timestamp("09:00"),

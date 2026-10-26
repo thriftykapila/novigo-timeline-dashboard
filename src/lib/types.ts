@@ -6,6 +6,7 @@ export interface User {
   roles: string[];
   customer_name?: string;
 }
+
 export interface Asset {
   id: string;
   name: string;
@@ -13,10 +14,12 @@ export interface Asset {
   assetlevel_id: number;
   children?: Asset[];
 }
+
 export interface AssetOption extends Asset {
   path: string;
   depth: number;
 }
+
 export interface Shift {
   id: string;
   code: string;
@@ -24,18 +27,21 @@ export interface Shift {
   shift_timings: string[];
   is_active: boolean;
 }
+
 export interface ShiftOption {
   id: string;
   label: string;
   start: string;
   end: string;
 }
+
 export interface TimeWindow {
   from: number;
   to: number;
   from_ts: string;
   to_ts: string;
 }
+
 export interface RawSegment {
   start_at: string;
   end_at: string;
@@ -44,6 +50,7 @@ export interface RawSegment {
   downtime_name?: string | null;
   stoppage_name?: string | null;
 }
+
 export type SegmentKind =
   | "runtime"
   | "unplanned"
@@ -51,18 +58,21 @@ export type SegmentKind =
   | "stoppage"
   | "plannedDowntime"
   | "unplannedDowntime";
+
 export interface Segment {
   start: number;
   end: number;
   kind: SegmentKind;
   label: string;
 }
+
 export interface ProduceCount {
   bucket_start: string;
   part_model_id: string;
   ok_count: number;
   ng_count: number;
 }
+
 export interface Produce {
   produce_id: string;
   first_seen_ts: string;
@@ -70,11 +80,13 @@ export interface Produce {
   produce_type?: string;
   part_model_id: string;
 }
+
 export interface ProduceBucket {
   bucket_start: string;
   part_model_id: string;
   produces: Produce[];
 }
+
 export interface MachineIntervals {
   machine_ids: (number | string)[];
   runtimes: RawSegment[];
@@ -83,12 +95,14 @@ export interface MachineIntervals {
   produce_counts: ProduceCount[];
   produces?: ProduceBucket[];
 }
+
 export interface CycleBucket {
   bucket_start: string;
   ideal_cycle_time_seconds: number | null;
   actual_cycle_time_seconds: number | null;
   entity_id?: string;
 }
+
 export interface HourBucket {
   start: number;
   end: number;
@@ -107,6 +121,7 @@ export interface HourBucket {
   ideal: number | null;
   actual: number | null;
 }
+
 export interface ChartPoint {
   time: number;
   cumulative: number;

@@ -33,29 +33,32 @@ const SERIES_COLORS = [
   "#3d72bd",
   "#7d53ae",
 ];
-const BAND_COLORS: Record<SegmentKind, string> = {
-  runtime: "#22a69a",
-  unplanned: "#c2d944",
-  unknown: "#ff8269",
-  stoppage: "#7361c9",
-  plannedDowntime: "#83aa22",
-  unplannedDowntime: "#ff8269",
-};
-const BAND_LABELS: Record<SegmentKind, string> = {
-  runtime: "Runtime",
-  unplanned: "Unplanned production",
-  unknown: "Unknown downtime",
-  stoppage: "Stoppage",
-  plannedDowntime: "Planned downtime",
-  unplannedDowntime: "Unplanned downtime",
-};
-const BAND_TEXT: Record<SegmentKind, string> = {
-  runtime: "#ffffff",
-  unplanned: "#404b06",
-  unknown: "#582a24",
-  stoppage: "#ffffff",
-  plannedDowntime: "#233100",
-  unplannedDowntime: "#582a24",
+const BAND_STYLES: Record<
+  SegmentKind,
+  { color: string; textColor: string; label: string }
+> = {
+  runtime: { color: "#22a69a", textColor: "#ffffff", label: "Runtime" },
+  unplanned: {
+    color: "#c2d944",
+    textColor: "#404b06",
+    label: "Unplanned production",
+  },
+  unknown: {
+    color: "#ff8269",
+    textColor: "#582a24",
+    label: "Unknown downtime",
+  },
+  stoppage: { color: "#7361c9", textColor: "#ffffff", label: "Stoppage" },
+  plannedDowntime: {
+    color: "#83aa22",
+    textColor: "#233100",
+    label: "Planned downtime",
+  },
+  unplannedDowntime: {
+    color: "#ff8269",
+    textColor: "#582a24",
+    label: "Unplanned downtime",
+  },
 };
 const tickTime = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Kolkata",
@@ -79,17 +82,16 @@ const tooltipTime = new Intl.DateTimeFormat("en-GB", {
   second: "2-digit",
   hour12: false,
 });
-const number = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
+const countFormat = new Intl.NumberFormat("en-IN", {
+  maximumFractionDigits: 0,
+});
 
 interface Range {
   from: number;
   to: number;
 }
-interface PreparedPoint {
+interface Marker {
   point: ChartPoint;
-  series: number;
-}
-interface HitPoint extends PreparedPoint {
   x: number;
   y: number;
 }
@@ -106,7 +108,7 @@ interface Plot extends Range {
   width: number;
   height: number;
   maxY: number;
-  hits: HitPoint[];
+  markers: Marker[];
 }
 interface Brush {
   start: number;
@@ -114,7 +116,7 @@ interface Brush {
   pointerId: number;
 }
 
-/** Shared binary search for time-sorted data; no timestamp parsing on interaction. */
+// Find the first point at or after a timestamp in a sorted array.
 export function lowerBoundByTime<T>(
   items: T[],
   timestamp: number,
@@ -123,9 +125,12 @@ export function lowerBoundByTime<T>(
   let low = 0;
   let high = items.length;
   while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (getTime(items[middle]) < timestamp) low = middle + 1;
-    else high = middle;
+    const middle = Math.floor((low + high) / 2);
+    if (getTime(items[middle]) < timestamp) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
   }
   return low;
 }
@@ -133,15 +138,14 @@ export function lowerBoundByTime<T>(
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
-function shortModel(value: string) {
-  return value.length > 16 ? `${value.slice(0, 8)}…` : value;
-}
+
 function niceMaximum(value: number) {
   if (value <= 4) return 4;
   const magnitude = 10 ** Math.floor(Math.log10(value));
   const step = magnitude / 2;
   return Math.ceil((value * 1.07) / step) * step;
 }
+
 function timeTicks(from: number, to: number, targetCount: number) {
   const choices = [
     10_000, 15_000, 30_000, 60_000, 120_000, 300_000, 600_000, 900_000,
@@ -150,14 +154,21 @@ function timeTicks(from: number, to: number, targetCount: number) {
   const interval =
     choices.find((choice) => choice >= (to - from) / targetCount) ?? 86_400_000;
   const values = [from];
-  for (let time = from + interval; time < to - interval * 0.2; time += interval)
+  for (
+    let time = from + interval;
+    time < to - interval * 0.2;
+    time += interval
+  ) {
     values.push(time);
-  // Retain the exact requested bounds; omit a nearby interior label to prevent collisions.
-  if (values.length > 1 && to - values[values.length - 1] < interval * 0.65)
+  }
+  // Keep the exact bounds without crowding the final label.
+  if (values.length > 1 && to - values[values.length - 1] < interval * 0.65) {
     values.pop();
+  }
   values.push(to);
   return values;
 }
+
 function configureCanvas(
   canvas: HTMLCanvasElement,
   width: number,
@@ -196,52 +207,37 @@ function TimelineChart({
   const announcementRef = useRef<HTMLSpanElement>(null);
   const plotRef = useRef<Plot | null>(null);
   const brushRef = useRef<Brush | null>(null);
-  const hoverRef = useRef<HitPoint | null>(null);
+  const hoverRef = useRef<Marker | null>(null);
   const frameRef = useRef<number | null>(null);
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const focusedPointRef = useRef(-1);
   const [size, setSize] = useState({ width: 0, height: 320 });
   const [zoom, setZoom] = useState<Range | null>(null);
 
-  const prepared = useMemo(() => {
+  const chartData = useMemo(() => {
     const series: Series[] = [];
-    const seriesIndex = new Map<string, number>();
-    const resolved: PreparedPoint[] = [];
-    let max = 0;
+    const models = new Map<string, Series>();
+    let maximumCount = 0;
     let failures = 0;
     for (const point of points) {
-      let index = seriesIndex.get(point.partModel);
-      if (index === undefined) {
-        index = series.length;
-        seriesIndex.set(point.partModel, index);
-        series.push({
+      let model = models.get(point.partModel);
+      if (!model) {
+        model = {
           id: point.partModel,
-          color: SERIES_COLORS[index % SERIES_COLORS.length],
+          color: SERIES_COLORS[series.length % SERIES_COLORS.length],
           points: [],
-        });
+        };
+        models.set(point.partModel, model);
+        series.push(model);
       }
-      series[index].points.push(point);
-      resolved.push({ point, series: index });
-      max = Math.max(max, point.cumulative);
+      model.points.push(point);
+      maximumCount = Math.max(maximumCount, point.cumulative);
       if (point.result === "FAIL") failures++;
     }
-    return { points: resolved, series, maxY: niceMaximum(max), failures };
+    return { series, maxY: niceMaximum(maximumCount), failures };
   }, [points]);
 
-  const bands = useMemo(
-    () =>
-      segments.map((segment) => ({
-        ...segment,
-        color: BAND_COLORS[segment.kind],
-        textColor: BAND_TEXT[segment.kind],
-        caption: (segment.label || BAND_LABELS[segment.kind]).toUpperCase(),
-      })),
-    [segments],
-  );
-  const kinds = useMemo(
-    () => [...new Set(segments.map((segment) => segment.kind))],
-    [segments],
-  );
+  const bandKinds = [...new Set(segments.map((segment) => segment.kind))];
   const range =
     zoom && zoom.from >= timeWindow.from && zoom.to <= timeWindow.to
       ? zoom
@@ -318,13 +314,13 @@ function TimelineChart({
   }, []);
 
   const showTooltip = useCallback(
-    (hit: HitPoint, announce = false) => {
+    (marker: Marker, announce = false) => {
       const tooltip = tooltipRef.current;
       const plot = plotRef.current;
       if (!tooltip || !plot) return;
-      const point = hit.point;
+      const point = marker.point;
       const formattedTime = `${tooltipTime.format(point.time)} IST`;
-      const count = `${number.format(point.count)} ${point.count === 1 ? "part" : "parts"} · ${number.format(point.cumulative)} cumulative`;
+      const count = `${countFormat.format(point.count)} ${point.count === 1 ? "part" : "parts"} · ${countFormat.format(point.cumulative)} cumulative`;
       if (tooltipResultRef.current) {
         tooltipResultRef.current.textContent = `${point.result === "PASS" ? "●" : "×"} ${point.result} · ${individual ? "Individual produce" : "Hourly bucket"}`;
         tooltipResultRef.current.className =
@@ -342,14 +338,14 @@ function TimelineChart({
       tooltip.hidden = false;
       const tooltipWidth = Math.min(310, plot.width - 16);
       const x = clamp(
-        hit.x + 14,
+        marker.x + 14,
         8,
         Math.max(8, plot.width - tooltipWidth - 8),
       );
-      const y = hit.y > 166 ? hit.y - 154 : hit.y + 15;
+      const y = marker.y > 166 ? marker.y - 154 : marker.y + 15;
       tooltip.style.width = `${tooltipWidth}px`;
       tooltip.style.transform = `translate(${x}px, ${clamp(y, 8, plot.height - 148)}px)`;
-      hoverRef.current = hit;
+      hoverRef.current = marker;
       if (announce && announcementRef.current)
         announcementRef.current.textContent = `${point.result}. ${formattedTime}. ${count}. Part model ${point.partModel}. ID ${point.id}.`;
     },
@@ -373,8 +369,8 @@ function TimelineChart({
       height: size.height,
       from: range.from,
       to: range.to,
-      maxY: prepared.maxY,
-      hits: [],
+      maxY: chartData.maxY,
+      markers: [],
     };
     plotRef.current = plot;
     const plotWidth = plot.right - plot.left;
@@ -394,23 +390,25 @@ function TimelineChart({
     context.beginPath();
     context.rect(plot.left, plot.top, plotWidth, plotHeight);
     context.clip();
-    for (const band of bands) {
+    for (const band of segments) {
       if (band.end <= plot.from || band.start >= plot.to) continue;
+      const style = BAND_STYLES[band.kind];
       const x = timeX(Math.max(plot.from, band.start));
       const width = timeX(Math.min(plot.to, band.end)) - x;
-      context.fillStyle = band.color;
+      context.fillStyle = style.color;
       context.fillRect(x, plot.top, width + 0.5, plotHeight);
       if (width >= 17) {
         context.save();
-        context.fillStyle = band.textColor;
+        context.fillStyle = style.textColor;
         context.globalAlpha = 0.92;
         context.font = "600 10px Roboto, Arial, sans-serif";
         context.textAlign = "left";
         context.textBaseline = "alphabetic";
         context.translate(x + width / 2 + 3, plot.top + 12);
         context.rotate(Math.PI / 2);
-        if (context.measureText(band.caption).width <= plotHeight - 24)
-          context.fillText(band.caption, 0, 0);
+        const caption = (band.label || style.label).toUpperCase();
+        if (context.measureText(caption).width <= plotHeight - 24)
+          context.fillText(caption, 0, 0);
         context.restore();
       }
     }
@@ -424,34 +422,31 @@ function TimelineChart({
       context.stroke();
     }
 
-    const seriesGeometry: HitPoint[][] = prepared.series.map(() => []);
-    const first = lowerBoundByTime(
-      prepared.points,
-      plot.from,
-      (item) => item.point.time,
+    const markersByModel = new Map<string, Marker[]>(
+      chartData.series.map((model) => [model.id, []]),
     );
-    for (let index = first; index < prepared.points.length; index++) {
-      const item = prepared.points[index];
-      if (item.point.time > plot.to) break;
-      const hit = {
-        ...item,
-        x: timeX(item.point.time),
-        y: countY(item.point.cumulative),
+    const firstPoint = lowerBoundByTime(
+      points,
+      plot.from,
+      (point) => point.time,
+    );
+    for (let index = firstPoint; index < points.length; index++) {
+      const point = points[index];
+      if (point.time > plot.to) break;
+      const marker = {
+        point,
+        x: timeX(point.time),
+        y: countY(point.cumulative),
       };
-      plot.hits.push(hit);
-      seriesGeometry[item.series].push(hit);
+      plot.markers.push(marker);
+      markersByModel.get(point.partModel)!.push(marker);
     }
 
-    // One polyline and one batched PASS path per model. Only same-pixel PASSes coalesce.
+    // Draw each model in one pass. PASS dots sharing a pixel only need one circle.
     let renderedPasses = 0;
     let renderedFailures = 0;
-    for (
-      let seriesIndex = 0;
-      seriesIndex < prepared.series.length;
-      seriesIndex++
-    ) {
-      const series = prepared.series[seriesIndex];
-      const hits = seriesGeometry[seriesIndex];
+    for (const series of chartData.series) {
+      const markers = markersByModel.get(series.id)!;
       const before =
         lowerBoundByTime(series.points, plot.from, (point) => point.time) - 1;
       const after = lowerBoundByTime(
@@ -466,11 +461,11 @@ function TimelineChart({
         context.moveTo(timeX(point.time), countY(point.cumulative));
         hasStart = true;
       }
-      for (const hit of hits) {
+      for (const marker of markers) {
         if (!hasStart) {
-          context.moveTo(hit.x, hit.y);
+          context.moveTo(marker.x, marker.y);
           hasStart = true;
-        } else context.lineTo(hit.x, hit.y);
+        } else context.lineTo(marker.x, marker.y);
       }
       if (after < series.points.length && hasStart) {
         const point = series.points[after];
@@ -483,15 +478,15 @@ function TimelineChart({
       let lastX = -1;
       let lastY = -1;
       const radius = individual ? 2.5 : 3.8;
-      for (const hit of hits) {
-        if (hit.point.result === "FAIL") continue;
-        const pixelX = Math.round(hit.x);
-        const pixelY = Math.round(hit.y);
+      for (const marker of markers) {
+        if (marker.point.result === "FAIL") continue;
+        const pixelX = Math.round(marker.x);
+        const pixelY = Math.round(marker.y);
         if (pixelX === lastX && pixelY === lastY) continue;
         lastX = pixelX;
         lastY = pixelY;
-        context.moveTo(hit.x + radius, hit.y);
-        context.arc(hit.x, hit.y, radius, 0, Math.PI * 2);
+        context.moveTo(marker.x + radius, marker.y);
+        context.arc(marker.x, marker.y, radius, 0, Math.PI * 2);
         renderedPasses++;
       }
       context.fillStyle = series.color;
@@ -501,15 +496,15 @@ function TimelineChart({
       context.stroke();
     }
 
-    // FAILs are all retained and painted last so a dense PASS series cannot obscure defects.
+    // Keep every FAIL and draw it last so PASS dots cannot cover it.
     context.beginPath();
-    for (const hit of plot.hits) {
-      if (hit.point.result !== "FAIL") continue;
+    for (const marker of plot.markers) {
+      if (marker.point.result !== "FAIL") continue;
       const radius = individual ? 4 : 4.5;
-      context.moveTo(hit.x - radius, hit.y - radius);
-      context.lineTo(hit.x + radius, hit.y + radius);
-      context.moveTo(hit.x + radius, hit.y - radius);
-      context.lineTo(hit.x - radius, hit.y + radius);
+      context.moveTo(marker.x - radius, marker.y - radius);
+      context.lineTo(marker.x + radius, marker.y + radius);
+      context.moveTo(marker.x + radius, marker.y - radius);
+      context.lineTo(marker.x - radius, marker.y + radius);
       renderedFailures++;
     }
     context.lineWidth = 4.3;
@@ -528,7 +523,7 @@ function TimelineChart({
     for (let index = 0; index <= 4; index++) {
       const value = (plot.maxY * index) / 4;
       context.fillText(
-        number.format(value),
+        countFormat.format(value),
         plot.left - 9,
         plot.bottom - (index / 4) * plotHeight + 4,
       );
@@ -569,7 +564,7 @@ function TimelineChart({
     canvas.dataset.renderMs = (performance.now() - startedAt).toFixed(2);
     canvas.dataset.markersRendered = String(renderedPasses + renderedFailures);
     canvas.dataset.failureMarkers = String(renderedFailures);
-    canvas.dataset.visibleMarkers = String(plot.hits.length);
+    canvas.dataset.visibleMarkers = String(plot.markers.length);
     canvas.dataset.viewFrom = String(plot.from);
     canvas.dataset.viewTo = String(plot.to);
     canvas.dataset.drawRevision = String(
@@ -578,8 +573,9 @@ function TimelineChart({
     focusedPointRef.current = -1;
     drawOverlay();
   }, [
-    bands,
-    prepared,
+    segments,
+    points,
+    chartData,
     range.from,
     range.to,
     size,
@@ -588,12 +584,11 @@ function TimelineChart({
     hideTooltip,
   ]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    return () => {
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
-    },
-    [],
-  );
+    };
+  }, []);
 
   const updatePointer = useCallback(() => {
     frameRef.current = null;
@@ -621,25 +616,26 @@ function TimelineChart({
     const span = plot.to - plot.from;
     const timestamp =
       plot.from + ((pointer.x - plot.left) / (plot.right - plot.left)) * span;
-    const radiusTime = (14 / (plot.right - plot.left)) * span;
+    // Search only the timestamps within 14 pixels of the pointer.
+    const hoverTimeRadius = (14 / (plot.right - plot.left)) * span;
     const first = lowerBoundByTime(
-      plot.hits,
-      timestamp - radiusTime,
-      (hit) => hit.point.time,
+      plot.markers,
+      timestamp - hoverTimeRadius,
+      (marker) => marker.point.time,
     );
-    let nearest: HitPoint | null = null;
-    let distance = 15 * 15;
-    for (let index = first; index < plot.hits.length; index++) {
-      const hit = plot.hits[index];
-      if (hit.point.time > timestamp + radiusTime) break;
-      const candidateDistance =
-        (hit.x - pointer.x) ** 2 + (hit.y - pointer.y) ** 2;
+    let nearest: Marker | null = null;
+    let nearestDistance = 15 ** 2;
+    for (let index = first; index < plot.markers.length; index++) {
+      const marker = plot.markers[index];
+      if (marker.point.time > timestamp + hoverTimeRadius) break;
+      const distance =
+        (marker.x - pointer.x) ** 2 + (marker.y - pointer.y) ** 2;
       if (
-        candidateDistance < distance ||
-        (candidateDistance === distance && hit.point.result === "FAIL")
+        distance < nearestDistance ||
+        (distance === nearestDistance && marker.point.result === "FAIL")
       ) {
-        nearest = hit;
-        distance = candidateDistance;
+        nearest = marker;
+        nearestDistance = distance;
       }
     }
     if (nearest) showTooltip(nearest);
@@ -660,6 +656,7 @@ function TimelineChart({
     if (frameRef.current === null)
       frameRef.current = requestAnimationFrame(updatePointer);
   };
+
   const onPointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
     if (event.button !== 0 || loading) return;
     const plot = plotRef.current;
@@ -674,6 +671,7 @@ function TimelineChart({
     hideTooltip();
     drawOverlay();
   };
+
   const onPointerUp = (event: PointerEvent<HTMLCanvasElement>) => {
     const plot = plotRef.current;
     const brush = brushRef.current;
@@ -684,20 +682,16 @@ function TimelineChart({
       event.currentTarget.releasePointerCapture(event.pointerId);
     brushRef.current = null;
     if (Math.abs(brush.current - brush.start) >= 6) {
-      const span = plot.to - plot.from;
-      const a =
+      const timePerPixel = (plot.to - plot.from) / (plot.right - plot.left);
+      const selectionFrom =
         plot.from +
-        ((Math.min(brush.start, brush.current) - plot.left) /
-          (plot.right - plot.left)) *
-          span;
-      const b =
+        (Math.min(brush.start, brush.current) - plot.left) * timePerPixel;
+      const selectionTo =
         plot.from +
-        ((Math.max(brush.start, brush.current) - plot.left) /
-          (plot.right - plot.left)) *
-          span;
-      const nextSpan = Math.max(minimumSpan, b - a);
+        (Math.max(brush.start, brush.current) - plot.left) * timePerPixel;
+      const nextSpan = Math.max(minimumSpan, selectionTo - selectionFrom);
       const from = clamp(
-        (a + b - nextSpan) / 2,
+        (selectionFrom + selectionTo - nextSpan) / 2,
         timeWindow.from,
         timeWindow.to - nextSpan,
       );
@@ -719,6 +713,7 @@ function TimelineChart({
     );
     setZoom(nextSpan >= fullSpan ? null : { from, to: from + nextSpan });
   };
+
   const onKeyDown = (event: KeyboardEvent<HTMLCanvasElement>) => {
     if (loading) return;
     if (event.key === "+" || event.key === "=") {
@@ -734,14 +729,14 @@ function TimelineChart({
       drawOverlay();
     } else if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
       event.preventDefault();
-      const hits = plotRef.current?.hits;
-      if (!hits?.length) return;
+      const markers = plotRef.current?.markers;
+      if (!markers?.length) return;
       focusedPointRef.current = clamp(
         focusedPointRef.current + (event.key === "ArrowRight" ? 1 : -1),
         0,
-        hits.length - 1,
+        markers.length - 1,
       );
-      showTooltip(hits[focusedPointRef.current], true);
+      showTooltip(markers[focusedPointRef.current], true);
       drawOverlay();
     }
   };
@@ -756,15 +751,15 @@ function TimelineChart({
       <div className="timeline-key-row">
         <div className="timeline-series-key">
           <span className="timeline-key-label">Part models</span>
-          {prepared.series.slice(0, 5).map((series) => (
+          {chartData.series.slice(0, 5).map((series) => (
             <span className="timeline-model" key={series.id} title={series.id}>
               <i style={{ backgroundColor: series.color }} />
-              {shortModel(series.id)}
+              {series.id.length > 16 ? `${series.id.slice(0, 8)}…` : series.id}
             </span>
           ))}
-          {prepared.series.length > 5 ? (
+          {chartData.series.length > 5 ? (
             <span className="timeline-key-label">
-              +{prepared.series.length - 5} more
+              +{chartData.series.length - 5} more
             </span>
           ) : null}
           <span className="timeline-result-key">
@@ -776,10 +771,10 @@ function TimelineChart({
           </span>
         </div>
         <div className="timeline-band-key" aria-label="Machine state legend">
-          {kinds.map((kind) => (
+          {bandKinds.map((kind) => (
             <span key={kind}>
-              <i style={{ backgroundColor: BAND_COLORS[kind] }} />
-              {BAND_LABELS[kind]}
+              <i style={{ backgroundColor: BAND_STYLES[kind].color }} />
+              {BAND_STYLES[kind].label}
             </span>
           ))}
         </div>
@@ -883,11 +878,11 @@ function TimelineChart({
       </div>
       <p id={summaryId} className="timeline-sr-only">
         Production chart from {tooltipTime.format(range.from)} to{" "}
-        {tooltipTime.format(range.to)} IST. {number.format(points.length)}{" "}
+        {tooltipTime.format(range.to)} IST. {countFormat.format(points.length)}{" "}
         {individual ? "individual produce" : "hourly bucket"} markers, including{" "}
-        {number.format(prepared.failures)} failure markers. Circles indicate
-        PASS and red crosses indicate FAIL. Colored bands show machine state.
-        All failure markers are retained at every zoom level.
+        {countFormat.format(chartData.failures)} failure markers. Circles
+        indicate PASS and red crosses indicate FAIL. Colored bands show machine
+        state. All failure markers are retained at every zoom level.
       </p>
       <span
         ref={announcementRef}

@@ -14,26 +14,27 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(
 );
 const TIMEOUT_MS = 30_000;
 
-/** sessionStorage persists reloads while ending the session when the browser tab closes. */
 export const tokenStorage = {
   get(): string | null {
-    return typeof sessionStorage === "undefined"
-      ? null
-      : sessionStorage.getItem(TOKEN_KEY);
+    if (typeof sessionStorage === "undefined") return null;
+    return sessionStorage.getItem(TOKEN_KEY);
   },
   set(token: string): void {
-    if (typeof sessionStorage !== "undefined")
+    if (typeof sessionStorage !== "undefined") {
       sessionStorage.setItem(TOKEN_KEY, token);
+    }
   },
   clear(): void {
-    if (typeof sessionStorage !== "undefined")
+    if (typeof sessionStorage !== "undefined") {
       sessionStorage.removeItem(TOKEN_KEY);
+    }
   },
 };
 
 export class ApiError extends Error {
   readonly status: number;
   readonly details: unknown;
+
   constructor(message: string, status: number, details?: unknown) {
     super(message);
     this.name = "ApiError";
@@ -44,7 +45,7 @@ export class ApiError extends Error {
 
 function validationMessage(value: unknown): string {
   if (typeof value === "string") return value;
-  if (Array.isArray(value))
+  if (Array.isArray(value)) {
     return value
       .map((item) => {
         if (item && typeof item === "object" && "msg" in item) {
@@ -58,10 +59,12 @@ function validationMessage(value: unknown): string {
       })
       .filter(Boolean)
       .join("; ");
-  if (value && typeof value === "object")
+  }
+  if (value && typeof value === "object") {
     return Object.entries(value)
       .map(([key, detail]) => `${key}: ${validationMessage(detail)}`)
       .join("; ");
+  }
   return "";
 }
 
@@ -105,11 +108,15 @@ async function request<T>(
   const maxRetries = retry ? 2 : 0;
   // A late response from a previous session must never expire or populate a new one.
   const token = authenticated ? tokenStorage.get() : null;
+
   for (let attempt = 0; ; attempt++) {
-    if (signal?.aborted)
+    if (signal?.aborted) {
       throw new DOMException("Request cancelled", "AbortError");
-    if (authenticated && tokenStorage.get() !== token)
+    }
+    if (authenticated && tokenStorage.get() !== token) {
       throw new DOMException("Session changed", "AbortError");
+    }
+
     const controller = new AbortController();
     let timedOut = false;
     const cancel = () => controller.abort();
@@ -119,73 +126,81 @@ async function request<T>(
       controller.abort();
     }, TIMEOUT_MS);
     try {
+      const headers: Record<string, string> = { Accept: "application/json" };
+      if (body !== undefined) headers["Content-Type"] = "application/json";
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       const response = await fetch(`${API_BASE}${path}`, {
         method,
         signal: controller.signal,
-        headers: {
-          Accept: "application/json",
-          ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
       });
       const payload: unknown = await response.json().catch(() => null);
-      if (controller.signal.aborted)
+      if (controller.signal.aborted) {
         throw new DOMException("Request cancelled", "AbortError");
-      if (authenticated && tokenStorage.get() !== token)
+      }
+      if (authenticated && tokenStorage.get() !== token) {
         throw new DOMException("Session changed", "AbortError");
+      }
+
       const envelope =
         payload && typeof payload === "object"
           ? (payload as Record<string, unknown>)
           : null;
       const envelopeStatus = Number(envelope?.status_code);
-      const status = !response.ok
-        ? response.status
-        : envelopeStatus >= 400
-          ? envelopeStatus
-          : response.status;
+      let status = response.status;
+      if (response.ok && envelopeStatus >= 400) status = envelopeStatus;
+
       if (!response.ok || status >= 400) {
         if (status === 401 && authenticated) {
           tokenStorage.clear();
-          if (typeof window !== "undefined")
+          if (typeof window !== "undefined") {
             window.dispatchEvent(new Event("novigo:session-expired"));
+          }
         }
         const detail = envelope?.detail ?? envelope?.data;
-        const message =
-          status === 403
-            ? "Access denied. You do not have permission to view this data."
-            : status === 422
-              ? validationMessage(detail) ||
-                String(
-                  envelope?.message || "Please check the selected filters.",
-                )
-              : String(
-                  envelope?.message ||
-                    envelope?.detail ||
-                    `Request failed (${status}).`,
-                );
+        let message: string;
+        if (status === 403) {
+          message =
+            "Access denied. You do not have permission to view this data.";
+        } else if (status === 422) {
+          message =
+            validationMessage(detail) ||
+            String(envelope?.message || "Please check the selected filters.");
+        } else {
+          message = String(
+            envelope?.message ||
+              envelope?.detail ||
+              `Request failed (${status}).`,
+          );
+        }
         throw new ApiError(message, status, detail);
       }
-      if (!envelope || !("data" in envelope))
+      if (!envelope || !("data" in envelope)) {
         throw new ApiError(
           "The server returned an unexpected response. Please try again.",
           502,
         );
+      }
       return envelope.data as T;
     } catch (error) {
-      if (signal?.aborted)
+      if (signal?.aborted) {
         throw new DOMException("Request cancelled", "AbortError");
-      const failure =
-        error instanceof ApiError
-          ? error
-          : timedOut
-            ? new ApiError("The request timed out. Please try again.", 408)
-            : error instanceof DOMException && error.name === "AbortError"
-              ? error
-              : new ApiError(
-                  "Unable to reach the server. Check your connection and try again.",
-                  0,
-                );
+      }
+      let failure: ApiError | DOMException;
+      if (error instanceof ApiError) {
+        failure = error;
+      } else if (timedOut) {
+        failure = new ApiError("The request timed out. Please try again.", 408);
+      } else if (error instanceof DOMException && error.name === "AbortError") {
+        failure = error;
+      } else {
+        failure = new ApiError(
+          "Unable to reach the server. Check your connection and try again.",
+          0,
+        );
+      }
       const retryable =
         failure instanceof ApiError &&
         (failure.status >= 500 ||
@@ -199,15 +214,6 @@ async function request<T>(
     await wait(400 * 2 ** attempt, signal);
   }
 }
-
-const scope = (asset: Asset) => ({
-  type: "asset",
-  asset: { asset_id: asset.id, asset_level_id: asset.assetlevel_id },
-});
-const timeRange = (window: TimeWindow) => ({
-  from_ts: window.from_ts,
-  to_ts: window.to_ts,
-});
 
 export const api = {
   async login(username: string, password: string, signal?: AbortSignal) {
@@ -250,8 +256,11 @@ export const api = {
       method: "POST",
       signal,
       body: {
-        entity_scope: scope(asset),
-        time_range: timeRange(window),
+        entity_scope: {
+          type: "asset",
+          asset: { asset_id: asset.id, asset_level_id: asset.assetlevel_id },
+        },
+        time_range: { from_ts: window.from_ts, to_ts: window.to_ts },
         produce_counts: true,
         exact_produces: individual,
         group_produce_counts_by_part_model: true,
@@ -262,8 +271,11 @@ export const api = {
       method: "POST",
       signal,
       body: {
-        entity_scope: scope(asset),
-        time_range: timeRange(window),
+        entity_scope: {
+          type: "asset",
+          asset: { asset_id: asset.id, asset_level_id: asset.assetlevel_id },
+        },
+        time_range: { from_ts: window.from_ts, to_ts: window.to_ts },
         metrics: ["ideal_cycle_time_seconds", "actual_cycle_time_seconds"],
         distribution: "hourly",
       },

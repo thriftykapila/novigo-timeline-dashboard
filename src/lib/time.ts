@@ -24,9 +24,9 @@ const dateFormatter = new Intl.DateTimeFormat("en-GB", {
 });
 
 export function formatTime(timestamp: number, seconds = false): string {
-  return Number.isFinite(timestamp)
-    ? (seconds ? secondsFormatter : timeFormatter).format(timestamp)
-    : "—";
+  if (!Number.isFinite(timestamp)) return "—";
+  const formatter = seconds ? secondsFormatter : timeFormatter;
+  return formatter.format(timestamp);
 }
 
 export function formatDate(timestamp: number): string {
@@ -34,44 +34,48 @@ export function formatDate(timestamp: number): string {
 }
 
 export function floorISTHour(timestamp: number): number {
-  return (
-    Math.floor((timestamp + IST_OFFSET_MS) / HOUR_MS) * HOUR_MS - IST_OFFSET_MS
-  );
+  const localHour = Math.floor((timestamp + IST_OFFSET_MS) / HOUR_MS);
+  return localHour * HOUR_MS - IST_OFFSET_MS;
 }
 
-const validTime = (value: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+function isValidTime(value: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
 
 export function buildShiftOptions(shifts: Shift[]): ShiftOption[] {
-  return shifts
-    .filter((shift) => shift.is_active)
-    .flatMap((shift) => {
-      const timings = [
-        ...new Set(shift.shift_timings.filter(validTime)),
-      ].sort();
-      return timings.map((start, index) => {
-        const end = timings[(index + 1) % timings.length];
-        return {
-          id: `${shift.id}:${start}`,
-          label: `${shift.name} · ${start}–${end}`,
-          start,
-          end,
-        };
+  const options: ShiftOption[] = [];
+  for (const shift of shifts) {
+    if (!shift.is_active) continue;
+
+    const startTimes = [
+      ...new Set(shift.shift_timings.filter(isValidTime)),
+    ].sort();
+    for (const [index, start] of startTimes.entries()) {
+      const end = startTimes[(index + 1) % startTimes.length];
+      options.push({
+        id: `${shift.id}:${start}`,
+        label: `${shift.name} · ${start}–${end}`,
+        start,
+        end,
       });
-    });
+    }
+  }
+  return options;
 }
 
 export function getShiftWindow(date: string, shift: ShiftOption): TimeWindow {
   if (
     !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-    !validTime(shift.start) ||
-    !validTime(shift.end)
+    !isValidTime(shift.start) ||
+    !isValidTime(shift.end)
   ) {
     throw new Error("Choose a valid date and shift.");
   }
   const from = Date.parse(`${date}T${shift.start}:00+05:30`);
   let to = Date.parse(`${date}T${shift.end}:00+05:30`);
-  if (!Number.isFinite(from) || !Number.isFinite(to))
+  if (!Number.isFinite(from) || !Number.isFinite(to)) {
     throw new Error("Choose a valid date and shift.");
+  }
   // Comparing the clocks also makes a one-entry shift span a full day.
   if (shift.end <= shift.start) to += 24 * HOUR_MS;
   return {

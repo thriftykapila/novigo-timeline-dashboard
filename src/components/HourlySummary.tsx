@@ -27,13 +27,18 @@ const rows: {
   { key: "unplanned", label: "Unplanned Production", unit: "min" },
   { key: "stoppage", label: "Stoppage", unit: "min" },
   { key: "unknown", label: "Unknown Downtime", unit: "min" },
+  { key: "plannedDowntime", label: "Planned Downtime", unit: "min" },
+  { key: "unplannedDowntime", label: "Unplanned Downtime", unit: "min" },
   { key: "ideal", label: "Ideal Cycle Time", unit: "s" },
   { key: "actual", label: "Actual Cycle Time", unit: "s" },
 ];
-function cell(value: number | null, unit?: string) {
+
+function formatValue(value: number | null, unit?: string) {
   if (value === null) return "";
-  return `${Number.isInteger(value) ? value.toLocaleString("en-IN") : value.toLocaleString("en-IN", { maximumFractionDigits: 1 })}${unit ? ` ${unit}` : ""}`;
+  const formatted = value.toLocaleString("en-IN", { maximumFractionDigits: 1 });
+  return unit ? `${formatted} ${unit}` : formatted;
 }
+
 export default function HourlySummary({
   hours,
   sourceHourOffsets = false,
@@ -41,28 +46,24 @@ export default function HourlySummary({
   hours: HourBucket[];
   sourceHourOffsets?: boolean;
 }) {
-  const overlapping = hours.some(
-    (h) =>
-      [
-        "runtime",
-        "unplanned",
-        "stoppage",
-        "unknown",
-        "plannedDowntime",
-        "unplannedDowntime",
-      ].reduce(
-        (sum, key) =>
-          sum + ((h[key as keyof HourBucket] as number | null) ?? 0),
-        0,
-      ) >
-      (h.end - h.start) / 60_000 + 0.05,
-  );
-  const extra = (
-    [
-      { key: "plannedDowntime", label: "Planned Downtime", unit: "min" },
-      { key: "unplannedDowntime", label: "Unplanned Downtime", unit: "min" },
-    ] as typeof rows
-  ).filter((row) => hours.some((h) => (h[row.key] ?? 0) > 0));
+  const hasOverlappingDurations = hours.some((hour) => {
+    const totalMinutes =
+      (hour.runtime ?? 0) +
+      (hour.unplanned ?? 0) +
+      (hour.stoppage ?? 0) +
+      (hour.unknown ?? 0) +
+      (hour.plannedDowntime ?? 0) +
+      (hour.unplannedDowntime ?? 0);
+    const hourMinutes = (hour.end - hour.start) / 60_000;
+    return totalMinutes > hourMinutes + 0.05;
+  });
+  const visibleRows = rows.filter((row) => {
+    if (row.key === "plannedDowntime" || row.key === "unplannedDowntime") {
+      return hours.some((hour) => (hour[row.key] ?? 0) > 0);
+    }
+    return true;
+  });
+
   return (
     <section className="surface summary-card" aria-labelledby="summary-title">
       <div className="section-heading">
@@ -92,16 +93,16 @@ export default function HourlySummary({
               <th scope="col">
                 Parameter <span>per hour</span>
               </th>
-              {hours.map((h) => (
-                <th key={h.start} scope="col">
-                  {h.label}
-                  <span>{h.partial ? "Partial hour" : "IST"}</span>
+              {hours.map((hour) => (
+                <th key={hour.start} scope="col">
+                  {hour.label}
+                  <span>{hour.partial ? "Partial hour" : "IST"}</span>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {[...rows.slice(0, 7), ...extra, ...rows.slice(7)].map((row) => (
+            {visibleRows.map((row) => (
               <tr key={row.key} className={row.className}>
                 <th scope="row">
                   {row.key === "pass" || row.key === "fail" ? (
@@ -109,12 +110,12 @@ export default function HourlySummary({
                   ) : null}
                   {row.label}
                 </th>
-                {hours.map((h) => (
+                {hours.map((hour) => (
                   <td
-                    key={h.start}
-                    className={!h.elapsed ? "future-cell" : undefined}
+                    key={hour.start}
+                    className={!hour.elapsed ? "future-cell" : undefined}
                   >
-                    {cell(h[row.key], row.unit)}
+                    {formatValue(hour[row.key], row.unit)}
                   </td>
                 ))}
               </tr>
@@ -122,7 +123,7 @@ export default function HourlySummary({
           </tbody>
         </table>
       </div>
-      {(overlapping || sourceHourOffsets) && (
+      {(hasOverlappingDurations || sourceHourOffsets) && (
         <div className="source-data-note">
           <InfoOutlined />
           <div>
@@ -132,7 +133,7 @@ export default function HourlySummary({
                 by their start time in IST.
               </p>
             )}
-            {overlapping && (
+            {hasOverlappingDurations && (
               <p>
                 Some source intervals overlap; summed durations may exceed
                 elapsed minutes. Source categories are preserved.
